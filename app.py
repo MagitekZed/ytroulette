@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room
 import game_logic
 
 app = Flask(__name__)
@@ -29,6 +29,12 @@ def join_game():
         else:
             return "Error: Invalid code or name"
     return render_template('join_game.html')
+
+@socketio.on('join')
+def on_join(data):
+    room = data['game_code']
+    join_room(room)
+    emit('player_joined', {'players': list(game_logic.games[room]['players'])}, room=room)
 
 @app.route('/game/<game_code>')
 def game(game_code):
