@@ -1,31 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>My Game</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-            text-align: center;
-            padding: 50px;
+    <title>Color Change Button</title>
+    <script src="https://cdn.socket.io/socket.io-3.0.3.min.js"></script>
+    <script type="text/javascript">
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        socket.on('color_change', function(data) {
+            document.getElementById("colorButton").style.backgroundColor = data.color;
+        });
+
+        function changeColor() {
+            socket.emit('change_color');
         }
-        h1 {
-            color: #333;
-        }
-        .container {
-            background-color: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin: auto;
-            width: 80%;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-    </style>
+    </script>
 </head>
 <body>
-    <div class="container">
-        <h1>Welcome to YouTube Roulette!</h1>
-        <p>Enjoy the game!</p>
-    </div>
+    <button id="colorButton" onclick="changeColor()">Change Color</button>
 </body>
 </html>
