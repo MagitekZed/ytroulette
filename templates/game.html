@@ -2,7 +2,19 @@
 <html>
 <head>
     <title>Game in Progress</title>
-    <!-- Add any CSS or JS links here -->
+    <script src="https://cdn.socket.io/socket.io-3.0.3.min.js"></script>
+    <script type="text/javascript">
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        socket.on('player_joined', function(data) {
+            if (data.game_code === '{{ game_code }}') {
+                var playersList = document.getElementById('playersList');
+                var newPlayer = document.createElement('li');
+                newPlayer.textContent = data.new_player;
+                playersList.appendChild(newPlayer);
+            }
+        });
+    </script>
     <style>
         .game-code {
             position: fixed;
@@ -14,13 +26,10 @@
 <body>
     <div class="game-code">Game Code: {{ game_code }}</div>
     <h2>Players:</h2>
-    <ul>
+    <ul id="playersList">
         {% for player in players %}
             <li>{{ player }}</li>
         {% endfor %}
     </ul>
-
-    <!-- Add more game logic here -->
-
 </body>
 </html>
