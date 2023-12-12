@@ -17,7 +17,7 @@ def create_game():
         game_code = game_logic.create_game(player_name)
         # Redirect to game page with game_code, or render a template with the code
         return game_code
-    return render_template('create_game.html')
+    return redirect(url_for('game', game_code=game_code))
 
 @app.route('/join_game', methods=['GET', 'POST'])
 def join_game():
@@ -29,7 +29,15 @@ def join_game():
             return "Joined game " + game_code
         else:
             return "Error: Invalid code or name"
-    return render_template('join_game.html')
+    return redirect(url_for('game', game_code=game_code))
+
+@app.route('/game/<game_code>')
+def game(game_code):
+    if game_code in game_logic.games:
+        players = game_logic.games[game_code]['players']
+        return render_template('game.html', players=players, game_code=game_code)
+    else:
+        return "Game not found"
 
 # Add more route definitions here
 
