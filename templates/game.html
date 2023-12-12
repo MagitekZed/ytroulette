@@ -5,14 +5,19 @@
     <script src="https://cdn.socket.io/socket.io-3.0.3.min.js"></script>
     <script type="text/javascript">
         var socket = io.connect('http://' + document.domain + ':' + location.port);
-
+    
+        socket.on('connect', function() {
+            socket.emit('join', {'game_code': '{{ game_code }}'});
+        });
+    
         socket.on('player_joined', function(data) {
-            if (data.game_code === '{{ game_code }}') {
-                var playersList = document.getElementById('playersList');
+            var playersList = document.getElementById('playersList');
+            playersList.innerHTML = '';  // Clear existing list
+            data.players.forEach(function(player) {
                 var newPlayer = document.createElement('li');
-                newPlayer.textContent = data.new_player;
+                newPlayer.textContent = player;
                 playersList.appendChild(newPlayer);
-            }
+            });
         });
     </script>
     <style>
