@@ -8,8 +8,15 @@
     <h1>Welcome to YouTube Roulette!</h1>
 
     <div>
-        <button onclick="location.href='/create_game'">Create Game</button>
-        <button onclick="location.href='/join_game'">Join Game</button>
+    <form action="/create_game" method="post">
+        <input type="text" name="player_name" placeholder="Enter your name">
+        <button type="submit">Create Game</button>
+    </form>
+    <form action="/join_game" method="post">
+        <input type="text" name="player_name" placeholder="Enter your name">
+        <input type="text" name="game_code" placeholder="Enter game code">
+        <button type="submit">Join Game</button>
+    </form>
     </div>
 
     <!-- Add JavaScript here to handle button actions if necessary -->
