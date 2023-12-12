@@ -9,7 +9,7 @@ current_color = "blue"
 
 @app.route('/')
 def home():
-    return render_template('home.html')
+    return render_template('home.html', color=current_color)
 
 @socketio.on('change_color')
 def handle_change_color():
