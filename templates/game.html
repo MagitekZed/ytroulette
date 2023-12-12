@@ -4,19 +4,19 @@
     <title>Game in Progress</title>
     <script src="https://cdn.socket.io/socket.io-3.0.3.min.js"></script>
     <script type="text/javascript">
-        var socket = io.connect('http://' + document.domain + ':' + location.port);
+        document.addEventListener('DOMContentLoaded', function() {
+            var socket = io.connect('http://' + document.domain + ':' + location.port);
+            var playerName = '{{ player_name }}'; // Dynamically get the player's name
+            socket.emit('join', {'game_code': '{{ game_code }}', 'player_name': playerName});
     
-        socket.on('connect', function() {
-            socket.emit('join', {'game_code': '{{ game_code }}'});
-        });
-    
-        socket.on('player_joined', function(data) {
-            var playersList = document.getElementById('playersList');
-            playersList.innerHTML = '';  // Clear existing list
-            data.players.forEach(function(player) {
-                var newPlayer = document.createElement('li');
-                newPlayer.textContent = player;
-                playersList.appendChild(newPlayer);
+            socket.on('update_players', function(data) {
+                var playersList = document.getElementById('playersList');
+                playersList.innerHTML = ''; // Clear existing list
+                data.players.forEach(function(player) {
+                    var playerItem = document.createElement('li');
+                    playerItem.textContent = player;
+                    playersList.appendChild(playerItem);
+                });
             });
         });
     </script>
