@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Game in Progress</title>
+    <!-- Add any CSS or JS links here -->
+    <style>
+        .game-code {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-code">Game Code: {{ game_code }}</div>
+    <h2>Players:</h2>
+    <ul>
+        {% for player in players %}
+            <li>{{ player }}</li>
+        {% endfor %}
+    </ul>
+
+    <!-- Add more game logic here -->
+
+</body>
+</html>
