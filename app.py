@@ -8,10 +8,9 @@ socketio = SocketIO(app)
 
 @socketio.on('join')
 def on_join(data):
-    game_code = data['game_code']
-    player_name = data['player_name']
-    game_logic.join_game(game_code, player_name)
-    emit('update_players', {'players': list(game_logic.games[game_code]['players'])}, room=game_code)
+    room = data['game_code']
+    join_room(room)
+    emit('update_players', {'players': list(game_logic.games[room]['players'])}, room=room)
 
 @app.route('/')
 def index():
@@ -37,12 +36,6 @@ def join_game():
         else:
             return "Error: Invalid code or name"
     return render_template('join_game.html')
-
-@socketio.on('join')
-def on_join(data):
-    room = data['game_code']
-    join_room(room)
-    emit('player_joined', {'players': list(game_logic.games[room]['players'])}, room=room)
 
 @app.route('/game/<game_code>')
 def game(game_code):
