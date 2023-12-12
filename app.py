@@ -24,7 +24,7 @@ def join_game():
         player_name = request.form['player_name']
         game_code = request.form['game_code']
         if game_logic.join_game(game_code, player_name):
-            emit('player_joined', {'new_player': player_name, 'game_code': code}, namespace='/game', broadcast=True)
+            emit('player_joined', {'new_player': player_name, 'game_code': game_code}, namespace='/game', broadcast=True)
             return redirect(url_for('game', game_code=game_code))
         else:
             return "Error: Invalid code or name"
