@@ -6,6 +6,13 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 
+@socketio.on('join')
+def on_join(data):
+    game_code = data['game_code']
+    player_name = data['player_name']
+    game_logic.join_game(game_code, player_name)
+    emit('update_players', {'players': list(game_logic.games[game_code]['players'])}, room=game_code)
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -15,7 +22,8 @@ def create_game():
     if request.method == 'POST':
         player_name = request.form['player_name']
         game_code = game_logic.create_game(player_name)
-        return redirect(url_for('game', game_code=game_code))
+        socketio.emit('join', {'game_code': game_code, 'player_name': player_name})
+        return redirect(url_for('game', game_code=game_code, player_name=player_name))
     return render_template('create_game.html')
 
 @app.route('/join_game', methods=['GET', 'POST'])
@@ -24,8 +32,8 @@ def join_game():
         player_name = request.form['player_name']
         game_code = request.form['game_code']
         if game_logic.join_game(game_code, player_name):
-            emit('player_joined', {'new_player': player_name, 'game_code': game_code}, namespace='/game', broadcast=True)
-            return redirect(url_for('game', game_code=game_code))
+            socketio.emit('join', {'game_code': game_code, 'player_name': player_name})
+            return redirect(url_for('game', game_code=game_code, player_name=player_name))
         else:
             return "Error: Invalid code or name"
     return render_template('join_game.html')
@@ -40,7 +48,8 @@ def on_join(data):
 def game(game_code):
     if game_code in game_logic.games:
         players = game_logic.games[game_code]['players']
-        return render_template('game.html', players=players, game_code=game_code)
+        player_name = request.args.get('player_name', '')  # Retrieve the player's name from the query parameters
+        return render_template('game.html', players=players, game_code=game_code, player_name=player_name)
     else:
         return "Game not found"
 
