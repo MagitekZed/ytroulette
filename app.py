@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
 import game_logic
 
 app = Flask(__name__)
@@ -24,6 +24,7 @@ def join_game():
         player_name = request.form['player_name']
         game_code = request.form['game_code']
         if game_logic.join_game(game_code, player_name):
+            emit('player_joined', {'new_player': player_name, 'game_code': code}, namespace='/game', broadcast=True)
             return redirect(url_for('game', game_code=game_code))
         else:
             return "Error: Invalid code or name"
