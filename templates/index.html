@@ -1,25 +1,40 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube Roulette</title>
-    <!-- Add any CSS or JS links here -->
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            background: linear-gradient(to right, #6dd5ed, #2193b0);
+            color: white;
+            padding: 50px;
+        }
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+        .button {
+            background-color: #4CAF50; /* Green */
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 12px;
+        }
+        .button2 {background-color: #008CBA;} /* Blue */
+    </style>
 </head>
 <body>
     <h1>Welcome to YouTube Roulette!</h1>
-
-    <div>
-    <form action="/create_game" method="post">
-        <input type="text" name="player_name" placeholder="Enter your name">
-        <button type="submit">Create Game</button>
-    </form>
-    <form action="/join_game" method="post">
-        <input type="text" name="player_name" placeholder="Enter your name">
-        <input type="text" name="game_code" placeholder="Enter game code">
-        <button type="submit">Join Game</button>
-    </form>
-    </div>
-
-    <!-- Add JavaScript here to handle button actions if necessary -->
-
+    <button class="button" onclick="location.href='/create_game'">Create Game</button>
+    <button class="button button2" onclick="location.href='/join_game'">Join Game</button>
 </body>
 </html>
