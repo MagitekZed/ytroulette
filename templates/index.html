@@ -5,16 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube Roulette</title>
     <link href="/static/styles.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <script src="/static/game_setup.js"></script>
 </head>
 <body>
     <header>
         <h1>YouTube Roulette</h1>
     </header>
 
-    <div class="button-container">
-        <button class="button" onclick="location.href='#'">Create Game</button>
-        <button class="button" onclick="location.href='#'">Join Game</button>
+    <button class="button" onclick="showCreateGameForm()">Create Game</button>
+    <button class="button" onclick="showJoinGameForm()">Join Game</button>
+
+    <div id="gameSetupForms">
+        <div id="createGameForm">
+            <h2>Create a Game</h2>
+            <input type="text" id="createPlayerName" placeholder="Enter your name">
+            <button onclick="createGame()">Create</button>
+        </div>
+
+        <div id="joinGameForm">
+            <h2>Join a Game</h2>
+            <input type="text" id="joinPlayerName" placeholder="Enter your name">
+            <input type="text" id="joinGameCode" placeholder="Enter game code">
+            <button onclick="joinGame()">Join</button>
+        </div>
     </div>
 
     <div class="rules-box">
