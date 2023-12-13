@@ -55,8 +55,8 @@ h1 {
     padding: 20px;
     border-radius: 15px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    width: 80%;
-    max-width: 600px;
+    width: 90%; /* Increased from 80% to 90% */
+    max-width: 700px; /* Adjusted max-width for a slightly wider box */
     border: 1px solid gold; /* Gold trim for the rules box */
 }
 
@@ -74,7 +74,8 @@ h1 {
     background-color: #fff;
     color: #333;
     margin: 10px auto; /* Center the cards */
-    padding: 20px;
+    padding: 15px; /* Reduced padding */
+    font-size: 0.9em; /* Reduced font size for content */
     border-radius: 10px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     border: 1px solid gold; /* Gold trim for rule cards */
