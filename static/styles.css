@@ -95,3 +95,38 @@ h1 {
         width: 100%;
     }
 }
+
+#gameSetupForms > div {
+    display: none; /* Initially hidden */
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    margin: 20px auto;
+    width: 80%;
+    max-width: 600px;
+    text-align: center;
+}
+
+#gameSetupForms input {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+    width: 80%;
+}
+
+#gameSetupForms button {
+    /* Style similar to the existing buttons in styles.css */
+    background-color: red;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+#gameSetupForms button:hover {
+    background-color: darkred;
+}
