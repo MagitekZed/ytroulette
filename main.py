@@ -49,4 +49,5 @@ def game(game_code):
 # Add more route definitions here
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+  app.run(host='0.0.0.1', port=8080)
+
