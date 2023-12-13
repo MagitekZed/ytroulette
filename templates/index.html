@@ -4,79 +4,53 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube Roulette</title>
-    <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            text-align: center;
-            background: linear-gradient(to bottom, #434343, #000000); /* Dark gray gradient from top to bottom */
-            color: white;
-            padding: 50px;
-            min-height: 100vh; /* Ensure the body is at least as tall as the viewport */
-            background-attachment: fixed; /* Fix the background so it doesn't scroll with the content */
-            background-repeat: no-repeat; /* Prevent the background from repeating */
-            background-size: cover; /* Ensure the background covers the entire element */
-        }
-        h1 {
-            font-size: 2.5em;
-            color: red;
-            margin-bottom: 20px;
-        }
-        .button {
-            background-color: red;
-            border: none;
-            color: white;
-            padding: 15px 32px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 12px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-        .button:hover {
-            background-color: darkred;
-            box-shadow: 0 12px 16px 0 rgba(0,0,0,0.24), 0 17px 50px 0 rgba(0,0,0,0.19);
-        }
-        .rules-box {
-            background-color: rgba(255, 255, 255, 0.9);
-            margin: 20px auto;
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            width: 80%;
-            max-width: 600px;
-            border: 1px solid #ccc;
-        }
-        .rules-box h2 {
-            color: #333;
-            font-size: 1.8em;
-        }
-        .rules-box p, .rules-box ul {
-            color: #555;
-            text-align: left;
-        }
-    </style>
+    <link href="/static/styles.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>Welcome to YouTube Roulette!</h1>
-    <button class="button" onclick="location.href='/create_game'">Create Game</button>
-    <button class="button button2" onclick="location.href='/join_game'">Join Game</button>
+    <header>
+        <h1>YouTube Roulette</h1>
+    </header>
+
+    <div class="button-container">
+        <button class="button" onclick="location.href='/create_game'">Create Game</button>
+        <button class="button" onclick="location.href='/join_game'">Join Game</button>
+    </div>
 
     <div class="rules-box">
         <h2>How to Play YouTube Roulette</h2>
-        <p>Welcome to YouTube Roulette! A fun and engaging game where you and your friends watch random YouTube videos and compete to select the best one. Here's how you play:</p>
-        <ul>
-            <li><strong>Joining a Game:</strong> Start a new game or join an existing one using a unique game code. Decide if you're playing locally (in the same room) or remotely.</li>
-            <li><strong>Gameplay:</strong> Players take turns. When it's your turn, a random 4-character search term is generated. Use this term to find videos on YouTube.</li>
-            <li><strong>Choosing Videos:</strong> You'll get three standard video options and up to three wildcards (like songs or playlists). Choose one to play for the group.</li>
-            <li><strong>Watching Videos:</strong> Watch the selected video together. Any player can vote to end the video early, but it takes a majority vote to skip it before one minute has passed.</li>
-            <li><strong>Superpowers:</strong> Each player has three superpowers to use once per game - Reroll, Replace, and Swap - allowing you to alter the search term to your advantage.</li>
-            <li><strong>Scoring:</strong> After each round, players vote on their favorite video. The video with the most votes earns its selector one point. A unanimous vote earns two points.</li>
-            <li><strong>Winning the Game:</strong> The first player to reach three points wins. Celebrate your victory, start a new game, or exit.</li>
-        </ul>
-        <p>Get ready for unexpected fun and hilarious moments with YouTube Roulette!</p>
+        <div class="rule-card">
+            <h3>Joining a Game</h3>
+            <p>Start a new game or join an existing one using a unique game code. Choose to play locally or remotely.</p>
+        </div>
+        <div class="rule-card">
+            <h3>Gameplay</h3>
+            <p>Players take turns. When it's your turn, a random 4-character search term is generated. Use this term to find videos on YouTube.</p>
+        </div>
+        <div class="rule-card">
+            <h3>Choosing Videos</h3>
+            <p>You'll get three standard video options and up to three wildcards (like songs or playlists). Choose one to play for the group.</p>
+        </div>
+        <div class="rule-card">
+            <h3>Watching Videos</h3>
+            <p>Watch the selected video together. Any player can vote to end the video early, but it takes a majority vote to skip it before one minute has passed.</p>
+        </div>
+        <div class="rule-card">
+            <h3>Superpowers</h3>
+            <p>Each player has three superpowers to use once per game - Reroll, Replace, and Swap - allowing you to alter the search term to your advantage.</p>
+        </div>
+        <div class="rule-card">
+            <h3>Scoring</h3>
+            <p>After each round, players vote on their favorite video. The video with the most votes earns its selector one point. A unanimous vote earns two points.</p>
+        </div>
+        <div class="rule-card">
+            <h3>Winning the Game</h3>
+            <p>The first player to reach three points wins. Celebrate your victory, start a new game, or exit.</p>
+        </div>
     </div>
+
+    <footer>
+        <p>&copy; 2023 YouTube Roulette. All rights reserved.</p>
+    </footer>
 </body>
 </html>
