@@ -64,4 +64,8 @@ function joinGame() {
     // Implement AJAX call to server to join game
 }
 
+window.onload = function() {
+    showCreateGameForm();
+};
+
 // Add event listeners for form submission if necessary

@@ -1,27 +1,42 @@
+html {
+    height: 100%;
+    margin: 0;
+}
+
 body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    margin: 0;
     font-family: 'Poppins', sans-serif;
     text-align: center;
     background: linear-gradient(to bottom, #434343, #000000);
     color: white;
-    padding: 50px;
-    min-height: 100vh;
     background-attachment: fixed;
     background-repeat: no-repeat;
     background-size: cover;
 }
 
+.content {
+    flex: 1 0 auto;
+    overflow: auto; /* Scroll inside content if needed */
+    padding: 50px; /* Move padding from body to content */
+}
+
 header, footer {
     padding: 20px 0;
-    border-top: 3px solid gold; /* Gold trim for header */
-    border-bottom: 3px solid gold; /* Gold trim for footer */
-    background-color: rgba(0, 0, 0, 0.6); /* Semi-transparent black background */
+    border-top: 3px solid gold;
+    border-bottom: 3px solid gold;
+    background-color: rgba(0, 0, 0, 0.6);
     border-radius: 10px;
-    margin-bottom: 30px; /* Added for footer */
 }
 
 footer {
     font-size: 0.8em;
+    flex-shrink: 0;
+    margin-bottom: 0; /* Remove margin-bottom */
 }
+
 
 h1 {
     font-size: 2.5em;
@@ -31,7 +46,7 @@ h1 {
 
 .rules-box {
     background-color: rgba(255, 255, 255, 0.9);
-    margin: 20px auto;
+    margin: 40px auto;
     padding: 20px;
     border-radius: 15px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);

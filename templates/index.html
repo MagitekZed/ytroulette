@@ -11,63 +11,63 @@
     <header>
         <h1>YouTube Roulette</h1>
     </header>
-
-    <button class="button" onclick="showCreateGameForm()">Create Game</button>
-    <button class="button" onclick="showJoinGameForm()">Join Game</button>
-    <button class="button" onclick="showRules()">Show Rules</button>
-
-    <div id="gameSetupForms">
-        <div id="createGameForm" class="form-box">
-            <button class="close-btn" onclick="hideForms()">X</button>
-            <h2>Create a Game</h2>
-            <input type="text" id="createPlayerName" placeholder="Enter your name">
-            <button onclick="createGame()">Create</button>
+    <div class="content">  
+        <button class="button" onclick="showCreateGameForm()">Create Game</button>
+        <button class="button" onclick="showJoinGameForm()">Join Game</button>
+        <button class="button" onclick="showRules()">Show Rules</button>
+    
+        <div id="gameSetupForms">
+            <div id="createGameForm" class="form-box">
+                <button class="close-btn" onclick="hideForms()">X</button>
+                <h2>Create a Game</h2>
+                <input type="text" id="createPlayerName" placeholder="Enter your name">
+                <button onclick="createGame()">Create</button>
+            </div>
+      
+            <div id="joinGameForm" class="form-box">
+                <button class="close-btn" onclick="hideForms()">X</button>
+                <h2>Join a Game</h2>
+                <input type="text" id="joinPlayerName" placeholder="Enter your name">
+                <input type="text" id="joinGameCode" placeholder="Enter game code"><br>
+                <button onclick="joinGame()">Join</button>
+            </div>
         </div>
-  
-        <div id="joinGameForm" class="form-box">
-            <button class="close-btn" onclick="hideForms()">X</button>
-            <h2>Join a Game</h2>
-            <input type="text" id="joinPlayerName" placeholder="Enter your name">
-            <input type="text" id="joinGameCode" placeholder="Enter game code"><br>
-            <button onclick="joinGame()">Join</button>
+    
+        <div class="rules-box" id="rulesBox">
+            <button class="close-btn" onclick="hideRules()">X</button>
+            <h2>How to Play YouTube Roulette</h2>
+            <div class="rule-card">
+                <h3>Joining a Game</h3>
+                <p>Start a new game or join an existing one using a unique game code. Choose to play locally or remotely.</p>
+            </div>
+            <div class="rule-card">
+                <h3>Gameplay</h3>
+                <p>Players take turns. When it's your turn, a random 4-character search term is generated. Use this term to find videos on YouTube.</p>
+            </div>
+            <div class="rule-card">
+                <h3>Choosing Videos</h3>
+                <p>You'll get three standard video options and up to three wildcards (like songs or playlists). Choose one to play for the group.</p>
+            </div>
+            <div class="rule-card">
+                <h3>Watching Videos</h3>
+                <p>Watch the selected video together. Any player can vote to end the video early, but it takes a majority vote to skip it before one minute has passed.</p>
+            </div>
+            <div class="rule-card">
+                <h3>Superpowers</h3>
+                <p>Each player has three superpowers to use once per game - Reroll, Replace, and Swap - allowing you to alter the search term to your advantage.</p>
+            </div>
+            <div class="rule-card">
+                <h3>Scoring</h3>
+                <p>After each round, players vote on their favorite video. The video with the most votes earns its selector one point. A unanimous vote earns two points.</p>
+            </div>
+            <div class="rule-card">
+                <h3>Winning the Game</h3>
+                <p>The first player to reach three points wins. Celebrate your victory, start a new game, or exit.</p>
+            </div>
         </div>
     </div>
-
-    <div class="rules-box" id="rulesBox">
-        <button class="close-btn" onclick="hideRules()">X</button>
-        <h2>How to Play YouTube Roulette</h2>
-        <div class="rule-card">
-            <h3>Joining a Game</h3>
-            <p>Start a new game or join an existing one using a unique game code. Choose to play locally or remotely.</p>
-        </div>
-        <div class="rule-card">
-            <h3>Gameplay</h3>
-            <p>Players take turns. When it's your turn, a random 4-character search term is generated. Use this term to find videos on YouTube.</p>
-        </div>
-        <div class="rule-card">
-            <h3>Choosing Videos</h3>
-            <p>You'll get three standard video options and up to three wildcards (like songs or playlists). Choose one to play for the group.</p>
-        </div>
-        <div class="rule-card">
-            <h3>Watching Videos</h3>
-            <p>Watch the selected video together. Any player can vote to end the video early, but it takes a majority vote to skip it before one minute has passed.</p>
-        </div>
-        <div class="rule-card">
-            <h3>Superpowers</h3>
-            <p>Each player has three superpowers to use once per game - Reroll, Replace, and Swap - allowing you to alter the search term to your advantage.</p>
-        </div>
-        <div class="rule-card">
-            <h3>Scoring</h3>
-            <p>After each round, players vote on their favorite video. The video with the most votes earns its selector one point. A unanimous vote earns two points.</p>
-        </div>
-        <div class="rule-card">
-            <h3>Winning the Game</h3>
-            <p>The first player to reach three points wins. Celebrate your victory, start a new game, or exit.</p>
-        </div>
-    </div>
-
     <footer>
-        <p>&copy; 2023 YouTube Roulette. All rights reserved.</p>
+        <p>&copy; 2023 Dando Design. All rights reserved.</p>
     </footer>
 </body>
 </html>
