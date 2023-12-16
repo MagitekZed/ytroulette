@@ -18,23 +18,32 @@ def generate_unique_game_id(length=24, games_dict=None):
         if unique_id not in games_dict:
             return unique_id
 
-def create_game(player_name, games_dict):
-    game_key = generate_game_key(games_dict=games_dict)
-    unique_game_id = generate_unique_game_id(games_dict=games_dict)
-    games_dict[game_key] = {
-        'host': player_name,
-        'players': {player_name: {'role': 'host', 'ready': False}},
-        'status': 'waiting',
-        'unique_id': unique_game_id
-    }
-    return game_key
+def create_game(player_name, player_id, games_dict):
+  game_key = generate_game_key(games_dict=games_dict)
+  unique_game_id = generate_unique_game_id(games_dict=games_dict)
+  games_dict[game_key] = {
+      'host': player_id,  # store player_id as the host identifier
+      'players': {
+          player_id: {
+              'name': player_name,  # include the player's name for reference
+              'role': 'host',
+              'ready': False
+          }
+      },
+      'status': 'waiting',
+      'unique_id': unique_game_id
+  }
+  return game_key
 
-def join_game(game_key, player_name, games_dict):
-    if game_key in games_dict and player_name not in games_dict[game_key]['players']:
-        games_dict[game_key]['players'][player_name] = {'role': 'player', 'ready': False}
-        return True
-    return False
-
+def join_game(game_key, player_name, player_id, games_dict):
+  if game_key in games_dict and player_id not in games_dict[game_key]['players']:
+      games_dict[game_key]['players'][player_id] = {
+          'name': player_name,  # include the player's name for reference
+          'role': 'player',
+          'ready': False
+      }
+      return True
+  return False
 
 def transition_game_key(old_key, games_dict):
     if old_key in games_dict:
@@ -44,9 +53,10 @@ def transition_game_key(old_key, games_dict):
         return new_key
     return None
 
-def set_player_ready(games, game_key, player_id, ready_status):
-    game = games.get(game_key)
+def set_player_ready(games_dict, game_key, player_id, ready_status):
+    game = games_dict.get(game_key)
     if game and player_id in game['players']:
         game['players'][player_id]['ready'] = ready_status
         return True
     return False
+    

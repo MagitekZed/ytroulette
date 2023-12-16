@@ -11,21 +11,37 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         function createPlayerListItem(player) {
-            console.log('Creating list item for player:', player); // Debugging line
             var playerItem = document.createElement('li');
             playerItem.className = 'player-item';
-            playerItem.textContent = player.name + (player.isHost ? ' (Host)' : '');
-
+            playerItem.setAttribute('data-player-id', player.player_id); // Add this line
+  
+            // Create a span to hold the player name and apply the new font and bold styling.
+            var playerNameSpan = document.createElement('span');
+            playerNameSpan.className = 'player-name'; // Class for styling the player's name
+            playerNameSpan.textContent = player.name + (player.isHost ? ' (Host)' : '');
+            playerItem.appendChild(playerNameSpan);
+  
+            // Create a "Ready" button with the same styling as other buttons.
+            var readyButton = document.createElement('button');
+            readyButton.className = 'button ready-button ' + (player.ready ? 'ready' : 'not-ready');
+            readyButton.textContent = player.ready ? 'Ready' : 'Not Ready';
+  
+            // Bind the click event only if this is the current session player.
             if (player.player_id === window.sessionId) {
-                var readyButton = document.createElement('button');
-                readyButton.className = 'ready-button ' + (player.ready ? 'ready' : 'not-ready');
-                readyButton.textContent = player.ready ? 'Ready' : 'Not Ready';
-                readyButton.onclick = function() {
-                    socket.emit('player_ready', { 'ready': !player.ready });
-                };
-                playerItem.appendChild(readyButton);
+                readyButton.addEventListener('click', function() {
+                    // Toggle the ready state locally.
+                    player.ready = !player.ready;
+  
+                    // Update the button class and text.
+                    readyButton.className = 'button ready-button ' + (player.ready ? 'ready' : 'not-ready');
+                    readyButton.textContent = player.ready ? 'Ready' : 'Not Ready';
+  
+                    // Emit the new ready state to the server.
+                    socket.emit('player_ready', { 'player_id': player.player_id, 'ready': player.ready });
+                });
             }
-
+  
+            playerItem.appendChild(readyButton);
             return playerItem;
         }
 
@@ -36,6 +52,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 readyButton.textContent = player.ready ? 'Ready' : 'Not Ready';
             }
         }
+  
 
         socket.on('update_players', function(data) {
             var playersList = document.getElementById('playersList');
@@ -53,13 +70,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         socket.on('player_ready_update', function(data) {
-            var playerItem = currentPlayers[data.player_name];
+            var playerItem = document.querySelector(`[data-player-id="${data.player_id}"]`); // Use a selector to find the player item
             if (playerItem) {
-                updatePlayerReadyState(playerItem, {
-                    name: data.player_name,
-                    ready: data.ready,
-                    player_id: window.sessionId
-                });
+                var readyButton = playerItem.querySelector('.ready-button');
+                if (readyButton) {
+                    readyButton.classList.toggle('ready', data.ready);
+                    readyButton.classList.toggle('not-ready', !data.ready);
+                    readyButton.textContent = data.ready ? 'Ready' : 'Not Ready';
+                }
             }
         });
     }

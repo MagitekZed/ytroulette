@@ -209,22 +209,39 @@ h1 {
     border-radius: 10px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     border: 1px solid gold;
-    display: block;
+    display: flex; /* Use flexbox to align the content */
+    justify-content: space-between; /* Align content with space between */
+    align-items: center; /* Center items vertically */
     width: 80%;
     max-width: 600px;
 }
 
-/* Responsive adjustments for player items */
-@media (max-width: 768px) {
-    .player-item {
-        width: calc(50% - 20px);
-    }
+.player-item span {
+    font-weight: bold; /* Make the player name text bold */
+    padding-left: 20px; /* Add some padding to the left */
+    flex-grow: 1; /* Allows the name to take up available space */
 }
 
-@media (max-width: 480px) {
-    .player-item {
-        width: 100%;
-    }
+/* You can import a fun/modern font from Google Fonts or another source */
+@import url('https://fonts.googleapis.com/css2?family=Righteous&display=swap');
+
+.player-name {
+    font-family: 'Righteous', cursive; /* This is an example; choose any font you like */
+}
+
+.ready-button {
+    padding: 10px 20px; /* Match padding to other buttons */
+    font-size: 14px; /* Match font size to other buttons */
+    border-radius: 12px; /* Match border-radius to other buttons */
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    border: none; /* Remove border */
+    display: inline-block; /* For inline level semantics */
+    margin: 4px 2px; /* Provide some margin around the button */
+    /* Use colors to indicate ready/not-ready states */
+    background-color: grey; /* Default state */
+    width: 130px; /* Fixed width for the ready button */
+    text-align: center; /* Center the text inside the button */
 }
 
 .ready-button.not-ready {
@@ -233,6 +250,10 @@ h1 {
 }
 
 .ready-button.ready {
-    background-color: red;
-    /* Other styles for the ready state */
+    background-color: red; /* Ready state */
+}
+
+.ready-button.ready:hover {
+    background-color: darkred; /* Hover state */
+    box-shadow: 0 12px 16px 0 rgba(0,0,0,0.24), 0 17px 50px 0 rgba(0,0,0,0.19);
 }

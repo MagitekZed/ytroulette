@@ -28,12 +28,15 @@ def generate_player_id():
 @app.route('/create_game', methods=['POST'])
 def create_game_route():
     player_name = request.form['player_name']
-    # Generate a unique player ID and store it in the session
-    player_id = generate_player_id()
-    session['player_id'] = player_id
-    # Create the game and store the game key in the session
-    game_key = game_creation.create_game(player_name, games)
+    # Generate a unique player ID if one does not already exist and store it in the session
+    if 'player_id' not in session:
+        session['player_id'] = generate_player_id()
+    player_id = session['player_id']
+
+    # Create the game using the player_id and store the game key in the session
+    game_key = game_creation.create_game(player_name, player_id, games)
     session['game_key'] = game_key
+
     # Send back JSON with the URL for redirection
     return jsonify({'url': url_for('game_lobby', game_key=game_key)})
 
@@ -41,18 +44,27 @@ def create_game_route():
 def join_game_route():
     player_name = request.form['player_name']
     game_key = request.form['game_code']
-    if game_creation.join_game(game_key, player_name, games):
-        # Generate a unique player ID if one does not already exist
-        if 'player_id' not in session:
-            session['player_id'] = generate_player_id()
+    # Generate a unique player ID if one does not already exist and store it in the session
+    if 'player_id' not in session:
+        session['player_id'] = generate_player_id()
+    player_id = session['player_id']
+
+    if game_creation.join_game(game_key, player_name, player_id, games):
         # Store the game key in the session
         session['game_key'] = game_key
-        updated_players = list(games[game_key]['players'].keys())
-        socketio.emit('update_players', {'players': updated_players}, room=game_key)
+        # Emit an update to all clients in the room with the new player list
+        players_info = [
+            {'player_id': pid, 'name': info['name'], 'isHost': (info['role'] == 'host'), 'ready': info['ready']}
+            for pid, info in games[game_key]['players'].items()
+        ]
+        socketio.emit('update_players', {'players': players_info}, room=game_key)
+
         # Send back JSON with the URL for redirection
         return jsonify({'url': url_for('game_lobby', game_key=game_key)})
     else:
+        # If the game code is invalid or the name is already taken, return an error
         return jsonify({'error': 'Invalid game code or name already taken'}), 400
+
 
 @app.route('/game_lobby/<game_key>')
 def game_lobby(game_key):
@@ -71,17 +83,22 @@ def clear_session():
 
 # Add more route definitions here
 
-# Server-side validation in app.py
 @socketio.on('player_ready')
 def handle_player_ready(data):
-    player_id = session.get('player_id')
-    game_key = session.get('game_key')
+    player_id = data.get('player_id')
     ready_status = data.get('ready')
+    game_key = session.get('game_key')
 
-    # Check if the player_id in session matches the player_id in the game
-    if games[game_key]['players'].get(player_id) and set_player_ready(games, game_key, player_id, ready_status):
-        # Broadcast the player's readiness to all clients in the game room
-        emit('player_ready_update', {'player_id': player_id, 'ready': ready_status}, room=game_key)
+    # Check if the player_id matches the player_id in the game
+    if player_id in games[game_key]['players']:
+        # Update the player's ready status
+        games[game_key]['players'][player_id]['ready'] = ready_status
+
+        # Broadcast the player's new ready status to all clients in the room
+        emit('player_ready_update', {
+            'player_id': player_id,
+            'ready': ready_status
+        }, room=game_key)
 
 @socketio.on('join')
 def on_join(data):
@@ -89,11 +106,16 @@ def on_join(data):
     join_room(room)
     game = games[room]
     players_info = [
-        {'player_id': player_id, 'name': player_id, 'isHost': (info['role'] == 'host'), 'ready': info['ready']}
+        {
+            'player_id': player_id, 
+            'name': info['name'],  # Correctly reference the player's name here
+            'isHost': (info['role'] == 'host'), 
+            'ready': info['ready']
+        }
         for player_id, info in game['players'].items()
     ]
-    print('Sending player info:', players_info)  # Debugging line
     socketio.emit('update_players', {'players': players_info}, room=room)
+
 
 if __name__ == '__main__':
   socketio.run(app, host='0.0.0.0', port=8080)

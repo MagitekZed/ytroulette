@@ -9,7 +9,7 @@
     <!-- Defer your custom JavaScript to ensure it runs after the page content is loaded -->
     <script src="/static/game_setup.js" defer></script>
     <script type="text/javascript">
-        window.sessionId = "{{ player_id }}";
+        window.sessionId = "{{ session['player_id'] }}";
     </script>
 </head>
 
