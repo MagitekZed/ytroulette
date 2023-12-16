@@ -5,8 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube Roulette</title>
     <link href="/static/styles.css" rel="stylesheet">
-    <script src="/static/game_setup.js"></script>
+    <!-- Include the Socket.IO client script -->
+    <!-- Include the Socket.IO client script from CDN -->
+    <script src="https://cdn.socket.io/socket.io-3.0.3.min.js"></script>
+    <script src="/static/game_setup.js" defer></script>
+    <script>
+        // Check if the game_key is present in the template context
+        {% if game_key %}
+            window.addEventListener('load', (event) => {
+                // Ask the user if they want to rejoin their game
+                var rejoin = confirm("You have a game in progress. Would you like to rejoin?");
+                if (rejoin) {
+                    // Redirect to the game lobby
+                    window.location.href = "{{ url_for('game_lobby', game_key=game_key) }}";
+                } else {
+                    // Clear the session and refresh the landing page
+                    fetch('/clear_session', { method: 'POST' })
+                        .then(response => window.location.href = "/")
+                        .catch(error => console.error('Error:', error));
+                }
+            });
+        {% endif %}
+    </script>
 </head>
+
 <body>
     <header>
         <h1>YouTube Roulette</h1>

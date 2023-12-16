@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>YouTube Roulette - Game Lobby</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <!-- Include the Socket.IO client script from CDN -->
+    <script src="https://cdn.socket.io/socket.io-3.0.3.min.js"></script>
+    <!-- Defer your custom JavaScript to ensure it runs after the page content is loaded -->
+    <script src="/static/game_setup.js" defer></script>
+    <script type="text/javascript">
+        window.sessionId = "{{ player_id }}";
+    </script>
+</head>
+
+<body>
+    <header>
+        <h1>Game Lobby</h1>
+        <div class="game-code">Game Code: {{ game_code }}</div>
+    </header>
+
+    <section class="content">
+        <h2>Players:</h2>
+        <ul id="playersList" class="players-list">
+            <!-- Initially empty; players will be added via JavaScript -->
+        </ul>
+    </section>
+
+    <footer>
+        <p>YouTube Roulette</p>
+    </footer>
+
+    <script>
+        window.gameCode = "{{ game_code }}";
+        window.playerName = "{{ game.players.keys()|first }}"; // Assuming the first player is the one who created the game
+    </script>
+</body>
+</html>

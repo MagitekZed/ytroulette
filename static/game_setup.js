@@ -1,3 +1,71 @@
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.location.pathname.startsWith('/game_lobby/')) {
+        var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
+
+        let currentPlayers = {};
+
+        if (window.gameCode) {
+            socket.on('connect', function() {
+                socket.emit('join', { 'game_code': window.gameCode });
+            });
+        }
+
+        function createPlayerListItem(player) {
+            console.log('Creating list item for player:', player); // Debugging line
+            var playerItem = document.createElement('li');
+            playerItem.className = 'player-item';
+            playerItem.textContent = player.name + (player.isHost ? ' (Host)' : '');
+
+            if (player.player_id === window.sessionId) {
+                var readyButton = document.createElement('button');
+                readyButton.className = 'ready-button ' + (player.ready ? 'ready' : 'not-ready');
+                readyButton.textContent = player.ready ? 'Ready' : 'Not Ready';
+                readyButton.onclick = function() {
+                    socket.emit('player_ready', { 'ready': !player.ready });
+                };
+                playerItem.appendChild(readyButton);
+            }
+
+            return playerItem;
+        }
+
+        function updatePlayerReadyState(playerItem, player) {
+            var readyButton = playerItem.querySelector('.ready-button');
+            if (readyButton) {
+                readyButton.className = 'ready-button ' + (player.ready ? 'ready' : 'not-ready');
+                readyButton.textContent = player.ready ? 'Ready' : 'Not Ready';
+            }
+        }
+
+        socket.on('update_players', function(data) {
+            var playersList = document.getElementById('playersList');
+            data.players.forEach(function(player) {
+                var playerItem = currentPlayers[player.name];
+
+                if (!playerItem) {
+                    playerItem = createPlayerListItem(player);
+                    playersList.appendChild(playerItem);
+                    currentPlayers[player.name] = playerItem;
+                } else {
+                    updatePlayerReadyState(playerItem, player);
+                }
+            });
+        });
+
+        socket.on('player_ready_update', function(data) {
+            var playerItem = currentPlayers[data.player_name];
+            if (playerItem) {
+                updatePlayerReadyState(playerItem, {
+                    name: data.player_name,
+                    ready: data.ready,
+                    player_id: window.sessionId
+                });
+            }
+        });
+    }
+});
+
+
 function fadeIn(element) {
     element.style.display = 'block';
     element.style.opacity = 0;
@@ -56,16 +124,60 @@ function hideForms() {
     fadeOut(document.getElementById('joinGameForm'));
 }
 
+if (window.location.pathname === '/') {
+    showCreateGameForm();
+}
+
 function createGame() {
-    // Implement AJAX call to server to create game
+    var playerName = document.getElementById('createPlayerName').value.trim();
+
+    if (!playerName) {
+        alert('Please enter your name');
+        return;
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/create_game', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === XMLHttpRequest.DONE) {
+            if (xhr.status === 200) {
+                var response = JSON.parse(xhr.responseText);
+                window.location.href = response.url;
+            } else {
+                alert('Error creating game');
+            }
+        }
+    };
+
+    xhr.send('player_name=' + encodeURIComponent(playerName));
 }
 
 function joinGame() {
-    // Implement AJAX call to server to join game
+    var playerName = document.getElementById('joinPlayerName').value.trim();
+    var gameCode = document.getElementById('joinGameCode').value.trim();
+
+    if (!playerName || !gameCode) {
+        alert('Please enter your name and game code');
+        return;
+    }
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', '/join_game', true);
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === XMLHttpRequest.DONE) {
+            if (xhr.status === 200) {
+                var response = JSON.parse(xhr.responseText);
+                window.location.href = response.url;
+            } else {
+                alert('Error joining game');
+            }
+        }
+    };
+
+    xhr.send('player_name=' + encodeURIComponent(playerName) + '&game_code=' + encodeURIComponent(gameCode));
 }
 
-window.onload = function() {
-    showCreateGameForm();
-};
-
-// Add event listeners for form submission if necessary
