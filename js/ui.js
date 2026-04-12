@@ -558,7 +558,7 @@ export function renderHubGame(state) {
             const badge = video.type === 'playlist' ? '<span class="hub-badge-playlist">PLAYLIST</span>' : '';
             const meta = video.type === 'video'
               ? `<span class="hub-thumb-duration">${duration}</span><span class="hub-thumb-views">${formatViews(video.viewCount)} views</span>`
-              : `<span class="hub-thumb-duration">${video.itemCount || '?'} videos</span>`;
+              : `<span class="hub-thumb-duration"></span><span class="hub-thumb-views">${video.itemCount || '?'} videos</span>`;
             return `
               <div class="hub-thumb">
                 <span class="hub-thumb-num">${i + 1}</span>
