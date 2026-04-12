@@ -6,14 +6,32 @@
 let player = null;
 let playerReady = false;
 let onVideoEndCallback = null;
-let pendingVideoId = null; // Queue a video to play once player is ready
+let pendingVideoId = null;
+let currentContainerId = null;
 
 // Initialize the YouTube IFrame API player
 export function initPlayer(containerId, onEnd) {
   onVideoEndCallback = onEnd;
+  currentContainerId = containerId;
 
-  // Already initialized and ready
-  if (player && playerReady) return;
+  // Check if the old player's iframe is still in the DOM
+  if (player && playerReady) {
+    const iframe = document.querySelector(`#${containerId} iframe, iframe#${containerId}`);
+    if (iframe && iframe.parentNode) {
+      // Player is still alive in the DOM
+      return;
+    }
+    // Player's DOM element was destroyed — clean up
+    console.log('YouTube player DOM destroyed, re-creating...');
+    player = null;
+    playerReady = false;
+  }
+
+  // If we already have a player object but it's not ready, destroy and retry
+  if (player && !playerReady) {
+    try { player.destroy(); } catch { /* ignore */ }
+    player = null;
+  }
 
   // If API is already loaded, create player directly
   if (window.YT && window.YT.Player) {
@@ -26,40 +44,44 @@ export function initPlayer(containerId, onEnd) {
 }
 
 function createPlayer(containerId) {
-  // Don't create if already exists
-  if (player) return;
-
   const el = document.getElementById(containerId);
   if (!el) {
     console.warn('YouTube player container not found:', containerId);
     return;
   }
 
-  player = new window.YT.Player(containerId, {
-    width: '100%',
-    height: '100%',
-    playerVars: {
-      autoplay: 0,
-      controls: 1,
-      modestbranding: 1,
-      rel: 0,
-      fs: 1,
-      playsinline: 1,
-    },
-    events: {
-      onReady: () => {
-        playerReady = true;
-        // Play any queued video
-        if (pendingVideoId) {
-          const vid = pendingVideoId;
-          pendingVideoId = null;
-          playVideo(vid);
-        }
+  try {
+    player = new window.YT.Player(containerId, {
+      width: '100%',
+      height: '100%',
+      playerVars: {
+        autoplay: 0,
+        controls: 1,
+        modestbranding: 1,
+        rel: 0,
+        fs: 1,
+        playsinline: 1,
       },
-      onStateChange: onPlayerStateChange,
-      onError: onPlayerError,
-    },
-  });
+      events: {
+        onReady: () => {
+          console.log('YouTube player ready');
+          playerReady = true;
+          // Play any queued video
+          if (pendingVideoId) {
+            const vid = pendingVideoId;
+            pendingVideoId = null;
+            playVideo(vid);
+          }
+        },
+        onStateChange: onPlayerStateChange,
+        onError: onPlayerError,
+      },
+    });
+  } catch (err) {
+    console.error('Failed to create YouTube player:', err);
+    player = null;
+    playerReady = false;
+  }
 }
 
 function onPlayerStateChange(event) {
@@ -71,7 +93,6 @@ function onPlayerStateChange(event) {
 
 function onPlayerError(event) {
   console.error('YouTube player error:', event.data);
-  // Trigger end callback on error so the game can continue
   if (onVideoEndCallback) {
     onVideoEndCallback();
   }
@@ -82,7 +103,6 @@ export function playVideo(videoId) {
   if (!videoId) return;
 
   if (!player || !playerReady) {
-    // Queue for when the player is ready
     console.log('Queuing video until player is ready:', videoId);
     pendingVideoId = videoId;
     return;
@@ -90,10 +110,11 @@ export function playVideo(videoId) {
 
   try {
     player.loadVideoById(videoId);
+    pendingVideoId = null;
   } catch (err) {
     console.error('Failed to load video:', err);
-    // Retry after a short delay (player may still be initializing)
     pendingVideoId = videoId;
+    // Retry after a short delay
     setTimeout(() => {
       if (pendingVideoId === videoId && player && playerReady) {
         pendingVideoId = null;
@@ -123,7 +144,20 @@ export function destroyPlayer() {
 
 // Check if player is ready
 export function isPlayerReady() {
-  return playerReady;
+  // Also verify the DOM element still exists
+  if (playerReady && player) {
+    if (currentContainerId) {
+      const el = document.getElementById(currentContainerId);
+      if (!el) {
+        // DOM was destroyed
+        player = null;
+        playerReady = false;
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
 }
 
 // ============================================================
@@ -159,7 +193,6 @@ export function buildPool(results) {
     }
   }
 
-  // Pool is everything up to and including the 3rd video
   const pool = results.slice(0, Math.min(cutoffIndex, 20));
   return pool;
 }

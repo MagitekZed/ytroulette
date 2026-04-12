@@ -282,11 +282,11 @@ async function handleRoomChange(payload) {
     const { data: players } = await db.from('yt_players').select().eq('room_code', state.roomCode);
     if (players) state.players = players;
     showView(viewForStatus(state.room.status));
+  } else if (state.isHub && oldTerm !== state.room.current_search_term) {
+    // Search term changed (superpower used) — re-search takes priority
+    await triggerSearch();
   } else if (state.isHub && oldPlayback !== state.room.playback_status) {
     handleHubPlaybackChange();
-  } else if (state.isHub && oldTerm !== state.room.current_search_term) {
-    // Search term changed (superpower used) — re-search
-    await triggerSearch();
   } else {
     debouncedRender();
   }
