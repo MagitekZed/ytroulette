@@ -16,7 +16,7 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const ROOM_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const SPECIALS = '1234567890&#()@!?:._"-\',';  // 22 special characters
-const WIN_SCORE = 3;
+const DEFAULT_WIN_SCORE = 3;
 const TERM_LENGTH = 4;
 
 // ============================================================
@@ -116,10 +116,12 @@ function generateRoomCode() {
   return code;
 }
 
-async function createRoom(playerName) {
+async function createRoom(playerName, winScore) {
   const code = generateRoomCode();
 
-  const { error: roomErr } = await db.from('yt_rooms').insert({ code, host_id: state.playerId, status: 'lobby' });
+  const { error: roomErr } = await db.from('yt_rooms').insert({
+    code, host_id: state.playerId, status: 'lobby', win_score: winScore,
+  });
   if (roomErr) { toast('Failed to create room. Try again.', 'error'); return; }
 
   const { error: playerErr } = await db.from('yt_players').insert({
@@ -192,7 +194,7 @@ function subscribeToRoom(roomCode) {
     .subscribe();
 }
 
-function handleRoomChange(payload) {
+async function handleRoomChange(payload) {
   if (payload.eventType === 'DELETE') return;
   const oldStatus = state.room?.status;
   state.room = payload.new;
@@ -203,6 +205,9 @@ function handleRoomChange(payload) {
   state.swapFirstIndex = null;
 
   if (oldStatus !== state.room.status) {
+    // Re-fetch player data so scores are accurate on view transitions
+    const { data: players } = await db.from('yt_players').select().eq('room_code', state.roomCode);
+    if (players) state.players = players;
     showView(viewForStatus(state.room.status));
   } else {
     debouncedRender();
@@ -438,7 +443,8 @@ async function tallyAndAdvance() {
   const { data: updated } = await db.from('yt_players').select().eq('room_code', state.roomCode);
   state.players = updated || [];
 
-  const gameWinner = state.players.find(p => p.score >= WIN_SCORE);
+  const winScore = state.room.win_score || DEFAULT_WIN_SCORE;
+  const gameWinner = state.players.find(p => p.score >= winScore);
   await db.from('yt_rooms').update({ status: gameWinner ? 'gameover' : 'results' })
     .eq('code', state.roomCode);
 }
@@ -525,9 +531,10 @@ function setupEventListeners() {
         break;
       case 'create-game': {
         const name = document.getElementById('create-name')?.value?.trim();
+        const winScore = parseInt(document.getElementById('create-winscore')?.value) || DEFAULT_WIN_SCORE;
         if (!name) { toast('Enter your name!', 'error'); break; }
         btn.disabled = true;
-        await createRoom(name);
+        await createRoom(name, winScore);
         break;
       }
       case 'join-game': {

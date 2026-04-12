@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS yt_rooms (
   current_player_index INTEGER DEFAULT 0,
   current_search_term TEXT,
   round INTEGER DEFAULT 1,
+  win_score INTEGER DEFAULT 3,
   player_order TEXT[] DEFAULT ARRAY[]::TEXT[],
   past_terms TEXT[] DEFAULT ARRAY[]::TEXT[],
   videos JSONB DEFAULT '[]'::JSONB,

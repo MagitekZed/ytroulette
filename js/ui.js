@@ -35,6 +35,11 @@ export function renderHome() {
       <div id="home-create" class="form-card glass-card hidden">
         <h2>Create Game</h2>
         <input type="text" id="create-name" placeholder="Your name" maxlength="20" autocomplete="off">
+        <div style="display:flex;align-items:center;gap:10px">
+          <label for="create-winscore" style="color:var(--text-muted);font-size:0.85rem;white-space:nowrap">Points to win:</label>
+          <input type="number" id="create-winscore" value="3" min="1" max="20"
+            style="width:70px;text-align:center;padding:10px;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:var(--font-heading);font-size:1.1rem;font-weight:700">
+        </div>
         <button class="btn btn-primary btn-full" data-action="create-game">Create Room</button>
       </div>
       <div id="home-join" class="form-card glass-card hidden">
@@ -108,9 +113,11 @@ export function renderGame(state) {
   const totalTurns = state.room?.player_order?.length || 0;
   const term = state.room?.current_search_term || '????';
 
+  const winScore = state.room?.win_score || 3;
+
   const header = `
     <div class="game-header">
-      <div class="game-round">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns}</div>
+      <div class="game-round">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns} · FIRST TO ${winScore}</div>
       <div class="game-turn-info">${isMyTurn ? 'Your Turn!' : `${esc(activePlayer?.name || '???')}'s Turn`}</div>
       <div class="mini-scores">
         ${getSortedPlayers(state).map(p => `
