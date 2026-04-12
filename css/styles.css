@@ -1557,9 +1557,13 @@ input[type="text"]:focus { border-color: var(--red); }
    ============================================================ */
 .yt-player-wrapper {
   position: fixed;
-  inset: 0;
+  top: 50px;
+  left: 0;
+  right: 0;
+  bottom: 44px;
   z-index: 500;
   background: #000;
+  border: 2px solid var(--border);
 }
 .yt-player-wrapper.hidden {
   display: none;
