@@ -85,7 +85,7 @@ async function init() {
 
       if (state.room?.status !== oldStatus) {
         showView(viewForStatus(state.room.status));
-      } else if (state.isHub && oldTerm !== state.room?.current_search_term) {
+      } else if (state.isHub && !state.isSearching && oldTerm !== state.room?.current_search_term) {
         // Term changed (superpower) — re-search takes priority
         await triggerSearch();
       } else if (state.isHub && state.room?.playback_status !== oldPlayback) {
@@ -306,7 +306,7 @@ async function handleRoomChange(payload) {
     const { data: players } = await db.from('yt_players').select().eq('room_code', state.roomCode);
     if (players) state.players = players;
     showView(viewForStatus(state.room.status));
-  } else if (state.isHub && oldTerm !== state.room.current_search_term) {
+  } else if (state.isHub && !state.isSearching && oldTerm !== state.room.current_search_term) {
     // Search term changed (superpower used) — re-search takes priority
     await triggerSearch();
   } else if (state.isHub && oldPlayback !== state.room.playback_status) {
@@ -402,10 +402,8 @@ async function triggerSearch() {
     });
 
     if (error || !data?.results) {
-      toast('YouTube search failed. Rerolling...', 'error');
-      // Auto-reroll on failure
-      const newTerm = generateSearchTerm();
-      await db.from('yt_rooms').update({ current_search_term: newTerm })
+      toast('YouTube search failed. Try re-searching.', 'error');
+      await db.from('yt_rooms').update({ playback_status: 'idle' })
         .eq('code', state.roomCode);
       state.isSearching = false;
       return;
