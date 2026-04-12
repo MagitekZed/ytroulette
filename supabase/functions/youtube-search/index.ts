@@ -86,13 +86,13 @@ serve(async (req) => {
       }
     }
 
-    // Step 2: Batch fetch video details — duration + embeddable status (1 quota unit per batch)
-    const videoDetails: Record<string, { duration: string; embeddable: boolean }> = {};
+    // Step 2: Batch fetch video details — duration + embeddable + view count (1 quota unit per batch)
+    const videoDetails: Record<string, { duration: string; embeddable: boolean; viewCount: string }> = {};
     if (videoIds.length > 0) {
       for (let i = 0; i < videoIds.length; i += 50) {
         const batch = videoIds.slice(i, i + 50);
         const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
-        detailsUrl.searchParams.set("part", "contentDetails,status");
+        detailsUrl.searchParams.set("part", "contentDetails,status,statistics");
         detailsUrl.searchParams.set("id", batch.join(","));
         detailsUrl.searchParams.set("key", YOUTUBE_API_KEY);
 
@@ -103,13 +103,35 @@ serve(async (req) => {
           videoDetails[v.id] = {
             duration: v.contentDetails?.duration || "PT0S",
             embeddable: v.status?.embeddable ?? false,
+            viewCount: v.statistics?.viewCount || "0",
           };
         }
       }
     }
 
-    // Step 3: Fetch first video of each playlist (1 quota unit each)
+    // Step 3: Fetch first video of each playlist + playlist details (1 quota unit each)
     const playlistFirstVideo: Record<string, { videoId: string; thumbnail: string; title: string }> = {};
+    const playlistDetails: Record<string, { itemCount: number }> = {};
+
+    // Batch fetch playlist details for item count
+    if (playlistIds.length > 0) {
+      const plDetailsUrl = new URL("https://www.googleapis.com/youtube/v3/playlists");
+      plDetailsUrl.searchParams.set("part", "contentDetails");
+      plDetailsUrl.searchParams.set("id", playlistIds.join(","));
+      plDetailsUrl.searchParams.set("key", YOUTUBE_API_KEY);
+      try {
+        const plDetailsRes = await fetch(plDetailsUrl.toString());
+        const plDetailsData = await plDetailsRes.json();
+        for (const pl of (plDetailsData.items || [])) {
+          playlistDetails[pl.id] = {
+            itemCount: pl.contentDetails?.itemCount || 0,
+          };
+        }
+      } catch (e) {
+        console.error("Failed to fetch playlist details:", e);
+      }
+    }
+
     for (const plId of playlistIds) {
       try {
         const plUrl = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
@@ -152,6 +174,7 @@ serve(async (req) => {
           ...r,
           duration: details.duration,
           durationSeconds: parseDuration(details.duration),
+          viewCount: parseInt(details.viewCount) || 0,
         });
 
         // Queue for UUSH playlist short-detection check
@@ -160,11 +183,13 @@ serve(async (req) => {
         }
       } else if (r.type === "playlist") {
         const firstVid = playlistFirstVideo[r.playlistId];
+        const plDetail = playlistDetails[r.playlistId];
         enriched.push({
           ...r,
           firstVideoId: firstVid?.videoId || null,
           firstVideoThumbnail: firstVid?.thumbnail || r.thumbnail,
           firstVideoTitle: firstVid?.title || "",
+          itemCount: plDetail?.itemCount || 0,
         });
       }
     }

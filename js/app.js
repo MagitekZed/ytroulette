@@ -301,6 +301,8 @@ async function handleRoomChange(payload) {
 
   if (oldStatus !== state.room.status) {
     state.isProcessing = false;
+    // Always hide the YouTube player when status changes (e.g., playing → voting)
+    if (state.isHub) Hub.stopVideo();
     const { data: players } = await db.from('yt_players').select().eq('room_code', state.roomCode);
     if (players) state.players = players;
     showView(viewForStatus(state.room.status));
@@ -453,12 +455,37 @@ function debouncedRender() {
 }
 
 function showView(name) {
+  // Clear any existing auto-advance timer
+  if (state._autoAdvanceTimer) {
+    clearInterval(state._autoAdvanceTimer);
+    state._autoAdvanceTimer = null;
+  }
+
   state.currentView = name;
   render();
 
   // When hub enters game view, trigger the first search
   if (state.isHub && name === 'game' && state.room?.playback_status === 'idle') {
     triggerSearch();
+  }
+
+  // Hub results auto-advance: 30-second countdown
+  if (state.isHub && name === 'results') {
+    let countdown = 30;
+    state._autoAdvanceTimer = setInterval(async () => {
+      countdown--;
+      const el = document.getElementById('hub-countdown');
+      if (el) el.textContent = countdown;
+      if (countdown <= 0) {
+        clearInterval(state._autoAdvanceTimer);
+        state._autoAdvanceTimer = null;
+        if (state.currentView === 'results' && !state.isProcessing) {
+          state.isProcessing = true;
+          await nextRound();
+          state.isProcessing = false;
+        }
+      }
+    }, 1000);
   }
 }
 

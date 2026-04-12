@@ -553,6 +553,9 @@ export function renderHubGame(state) {
             const thumb = video.type === 'playlist' ? (video.firstVideoThumbnail || video.thumbnail) : video.thumbnail;
             const duration = video.type === 'video' ? formatDuration(video.durationSeconds) : '';
             const badge = video.type === 'playlist' ? '<span class="hub-badge-playlist">PLAYLIST</span>' : '';
+            const meta = video.type === 'video'
+              ? `<span class="hub-thumb-duration">${duration}</span><span class="hub-thumb-views">${formatViews(video.viewCount)} views</span>`
+              : `<span class="hub-thumb-duration">${video.itemCount || '?'} videos</span>`;
             return `
               <div class="hub-thumb">
                 <span class="hub-thumb-num">${i + 1}</span>
@@ -560,7 +563,7 @@ export function renderHubGame(state) {
                 <div class="hub-thumb-info">
                   ${badge}
                   <span class="hub-thumb-title">${esc(video.title)}</span>
-                  ${duration ? `<span class="hub-thumb-duration">${duration}</span>` : ''}
+                  <div class="hub-thumb-meta">${meta}</div>
                 </div>
               </div>`;
           }).join('')}
@@ -649,6 +652,9 @@ export function renderHubResults(state) {
               </div>
             `).join('')}
           </div>
+          <div class="hub-auto-advance" id="hub-auto-advance">
+            Next round in <span id="hub-countdown">30</span>s
+          </div>
         </div>
       </div>
       ${renderHubAdminBar(state)}
@@ -729,6 +735,14 @@ function esc(str) {
 
 function getSortedPlayers(state) {
   return [...state.players].sort((a, b) => (b.score || 0) - (a.score || 0));
+}
+
+function formatViews(count) {
+  if (!count || count === 0) return '0';
+  if (count >= 1000000000) return (count / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (count >= 1000000) return (count / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (count >= 1000) return (count / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return count.toString();
 }
 
 function getRankEmoji(index) {

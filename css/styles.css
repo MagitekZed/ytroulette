@@ -1203,11 +1203,11 @@ input[type="text"]:focus { border-color: var(--red); }
 .hub-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(4, 1fr);
-  gap: 8px;
+  grid-auto-rows: min-content;
+  gap: 6px;
   width: 100%;
-  height: 100%;
   max-width: 1200px;
+  overflow-y: auto;
 }
 .hub-thumb {
   position: relative;
@@ -1222,6 +1222,7 @@ input[type="text"]:focus { border-color: var(--red); }
   display: flex;
   align-items: center;
   justify-content: center;
+  aspect-ratio: 16 / 9;
   border: 1px dashed rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.01);
 }
@@ -1252,9 +1253,8 @@ input[type="text"]:focus { border-color: var(--red); }
 }
 .hub-thumb-img {
   width: 100%;
-  flex: 1;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
-  min-height: 0;
 }
 .hub-thumb-info {
   padding: 4px 6px;
@@ -1271,10 +1271,20 @@ input[type="text"]:focus { border-color: var(--red); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.hub-thumb-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
 .hub-thumb-duration {
   font-size: 0.6rem;
   color: var(--text-muted);
   font-weight: 600;
+}
+.hub-thumb-views {
+  font-size: 0.55rem;
+  color: var(--text-dim);
 }
 .hub-badge-playlist {
   font-size: 0.55rem;
@@ -1284,6 +1294,13 @@ input[type="text"]:focus { border-color: var(--red); }
   padding: 1px 5px;
   border-radius: 4px;
   align-self: flex-start;
+}
+.hub-auto-advance {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 1rem;
+  margin-top: 16px;
+  animation: fadeInUp 0.4s ease;
 }
 
 /* --- Hub Video Area --- */
