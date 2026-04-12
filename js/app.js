@@ -373,7 +373,9 @@ function handleHubPlaybackChange() {
 
       Hub.playVideo(videoId);
     }, 200);
-  } else if (state.room.playback_status === 'stopped') {
+  } else {
+    // Any non-playing state: hide the player overlay
+    // (covers 'stopped', 'idle', 'searching', 'selecting', etc.)
     Hub.stopVideo();
   }
 }
