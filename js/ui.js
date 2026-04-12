@@ -709,6 +709,39 @@ function getRankEmoji(index) {
   return ['🥇', '🥈', '🥉'][index] || `${index + 1}.`;
 }
 
+// ============================================================
+// CONFIRM LEAVE OVERLAY (Hub)
+// ============================================================
+export function renderConfirmLeave() {
+  return `
+    <div class="overlay-backdrop">
+      <div class="overlay-dialog">
+        <div style="font-size:2.5rem;margin-bottom:12px">⚠️</div>
+        <h2>End Game?</h2>
+        <p style="color:var(--text-muted);margin:8px 0 20px">This will close the room and disconnect all players.</p>
+        <div style="display:flex;flex-direction:column;gap:10px;width:100%">
+          <button class="btn btn-primary btn-full" data-action="confirm-end-game">Yes, End Game</button>
+          <button class="btn btn-secondary btn-full" data-action="cancel-end-game">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ============================================================
+// HOST ENDED VIEW (Player)
+// ============================================================
+export function renderHostEnded() {
+  return `
+    <div class="home-view anim-fade-in" style="justify-content:center">
+      <div style="text-align:center">
+        <div style="font-size:3rem;margin-bottom:16px">👋</div>
+        <h1 style="font-family:var(--font-heading);font-size:1.6rem;margin-bottom:8px">Host Ended the Game</h1>
+        <p style="color:var(--text-muted);margin-bottom:24px">The room has been closed by the host.</p>
+        <button class="btn btn-primary btn-lg btn-full" data-action="dismiss-ended">OK</button>
+      </div>
+    </div>`;
+}
+
 export function tallyVotes(state) {
   const voteCounts = {};
   state.players.forEach(p => {

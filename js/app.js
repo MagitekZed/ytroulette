@@ -38,6 +38,7 @@ const state = {
   swapFirstIndex: null,
   isProcessing: false,
   isSearching: false,     // YouTube search in progress
+  confirmLeave: false,    // Hub leave confirmation dialog
 };
 
 // Expose state for UI rendering
@@ -258,7 +259,14 @@ function subscribeToRoom(roomCode) {
 }
 
 async function handleRoomChange(payload) {
-  if (payload.eventType === 'DELETE') return;
+  if (payload.eventType === 'DELETE') {
+    // Room was deleted (hub closed the game)
+    if (!state.isHub) {
+      state.currentView = 'host-ended';
+      render();
+    }
+    return;
+  }
   const oldStatus = state.room?.status;
   const oldPlayback = state.room?.playback_status;
   const oldTerm = state.room?.current_search_term;
@@ -442,6 +450,10 @@ function render() {
       case 'results': html = UI.renderHubResults(state); break;
       case 'gameover':html = UI.renderHubGameOver(state); break;
     }
+    // Append confirm-leave overlay if active
+    if (state.confirmLeave && state.currentView !== 'home') {
+      html += UI.renderConfirmLeave();
+    }
   } else {
     // Player rendering
     switch (state.currentView) {
@@ -451,6 +463,7 @@ function render() {
       case 'voting':  html = UI.renderVoting(state); break;
       case 'results': html = UI.renderResults(state); break;
       case 'gameover':html = UI.renderGameOver(state); break;
+      case 'host-ended': html = UI.renderHostEnded(); break;
     }
   }
 
@@ -737,12 +750,30 @@ async function playAgain() {
 
 async function leaveGame() {
   if (state.isHub) {
-    // Hub leaving — delete the room
-    await db.from('yt_rooms').delete().eq('code', state.roomCode);
-  } else {
-    await db.from('yt_players').delete()
-      .eq('id', state.playerId).eq('room_code', state.roomCode);
+    // Hub leaving — confirm first, then delete room
+    state.confirmLeave = true;
+    render();
+    return;
   }
+  await db.from('yt_players').delete()
+    .eq('id', state.playerId).eq('room_code', state.roomCode);
+  clearSession();
+  showView('home');
+}
+
+async function confirmEndGame() {
+  state.confirmLeave = false;
+  await db.from('yt_rooms').delete().eq('code', state.roomCode);
+  clearSession();
+  showView('home');
+}
+
+function cancelEndGame() {
+  state.confirmLeave = false;
+  render();
+}
+
+function dismissEnded() {
   clearSession();
   showView('home');
 }
@@ -926,6 +957,9 @@ function setupEventListeners() {
       case 'next-round': await nextRound(); break;
       case 'play-again': await playAgain(); break;
       case 'leave-game': await leaveGame(); break;
+      case 'confirm-end-game': await confirmEndGame(); break;
+      case 'cancel-end-game': cancelEndGame(); break;
+      case 'dismiss-ended': dismissEnded(); break;
       case 'kick-player': await kickPlayer(value); break;
       // Hub admin actions
       case 'skip-player': await skipPlayer(); break;
