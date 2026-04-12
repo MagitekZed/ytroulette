@@ -9,12 +9,16 @@ CREATE TABLE IF NOT EXISTS yt_rooms (
   code TEXT PRIMARY KEY,
   host_id TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'lobby',
+  is_hub BOOLEAN DEFAULT false,
   current_player_index INTEGER DEFAULT 0,
   current_search_term TEXT,
   round INTEGER DEFAULT 1,
   win_score INTEGER DEFAULT 3,
   player_order TEXT[] DEFAULT ARRAY[]::TEXT[],
   past_terms TEXT[] DEFAULT ARRAY[]::TEXT[],
+  search_results JSONB DEFAULT '[]'::JSONB,
+  selected_video_index INTEGER,
+  playback_status TEXT DEFAULT 'idle',
   videos JSONB DEFAULT '[]'::JSONB,
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -31,6 +35,9 @@ CREATE TABLE IF NOT EXISTS yt_players (
   has_swap BOOLEAN DEFAULT true,
   selected_video TEXT,
   vote_for TEXT,
+  picked_video_id TEXT,
+  picked_video_title TEXT,
+  picked_video_thumbnail TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (id, room_code)
 );
