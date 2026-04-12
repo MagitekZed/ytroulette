@@ -3,7 +3,7 @@
 // Pure functions that return HTML strings for each view.
 // ============================================================
 
-// --- Player color assignment (deterministic by ID) ---
+// --- Player colors ---
 const PLAYER_COLORS = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A',
   '#98D8C8', '#FFD93D', '#C9B1FF', '#FF8C94',
@@ -96,19 +96,20 @@ export function renderLobby(state) {
 }
 
 // ============================================================
-// GAME — Active Player Turn
+// GAME VIEW
 // ============================================================
 export function renderGame(state) {
-  const isMyTurn = state.room?.player_order?.[state.room.current_player_index] === state.playerId;
   const activePlayerId = state.room?.player_order?.[state.room.current_player_index];
   const activePlayer = state.players.find(p => p.id === activePlayerId);
-  const me = state.players.find(p => p.id === state.playerId);
+  const isMyTurn = activePlayerId === state.playerId;
   const turnNum = (state.room?.current_player_index || 0) + 1;
   const totalTurns = state.room?.player_order?.length || 0;
+  const term = state.room?.current_search_term || '????';
 
   const header = `
     <div class="game-header">
-      <div class="game-round">ROUND ${state.room?.round || 1} • TURN ${turnNum}/${totalTurns}</div>
+      <div class="game-round">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns}</div>
+      <div class="game-turn-info">${isMyTurn ? 'Your Turn!' : `${esc(activePlayer?.name || '???')}'s Turn`}</div>
       <div class="mini-scores">
         ${getSortedPlayers(state).map(p => `
           <span class="mini-score ${p.id === activePlayerId ? 'active-player' : ''}">${esc(p.name)}: ${p.score}</span>
@@ -116,40 +117,41 @@ export function renderGame(state) {
       </div>
     </div>`;
 
-  if (isMyTurn) {
-    return `<div class="game-view anim-fade-in">${header}${renderMyTurn(state, me)}</div>`;
-  } else {
-    return `<div class="game-view anim-fade-in">${header}${renderWaitingTurn(state, activePlayer)}</div>`;
-  }
-}
+  // Search term display — visible to ALL players
+  const replaceClass = (isMyTurn && state.replaceMode) ? 'replace-mode' : '';
+  const termLabel = isMyTurn ? 'YOUR SEARCH TERM' : `${esc(activePlayer?.name || '???').toUpperCase()}'S SEARCH TERM`;
 
-function renderMyTurn(state, me) {
-  const term = state.room?.current_search_term || '????';
-  const videos = state.room?.videos || [];
-  const standardVideos = videos.filter(v => v.type === 'standard');
-  const wildcardVideos = videos.filter(v => v.type === 'wildcard');
-
-  // Swap mode overlay
-  if (state.swapMode) {
-    return renderSwapModal(state);
-  }
-
-  const replaceClass = state.replaceMode ? 'replace-mode' : '';
-
-  return `
+  const termSection = `
     <div class="search-term-section ${replaceClass}">
-      <div class="search-term-label">YOUR SEARCH TERM</div>
-      <div class="search-term-chars">
+      <div class="search-term-label">${termLabel}</div>
+      <div class="search-term-chars" data-term="${esc(term)}">
         ${term.split('').map((ch, i) => `
           <div class="search-char"
-            ${state.replaceMode ? `data-action="replace-char" data-value="${i}" style="cursor:pointer"` : ''}>
+            ${(isMyTurn && state.replaceMode) ? `data-action="replace-char" data-value="${i}" style="cursor:pointer"` : ''}>
             ${ch}
           </div>
         `).join('')}
       </div>
-      ${state.replaceMode ? '<div class="replace-hint">Tap a character to replace it</div>' : ''}
-    </div>
+      ${(isMyTurn && state.replaceMode) ? '<div class="replace-hint">Tap a character to replace it</div>' : ''}
+    </div>`;
 
+  if (isMyTurn) {
+    return `<div class="game-view anim-fade-in">${header}${termSection}${renderMyControls(state)}</div>`;
+  } else {
+    return `<div class="game-view anim-fade-in">${header}${termSection}${renderWaitingMessage(activePlayer)}</div>`;
+  }
+}
+
+// Active player's controls (superpowers + Done button)
+function renderMyControls(state) {
+  const me = state.players.find(p => p.id === state.playerId);
+  const isLastPlayer = (state.room?.current_player_index || 0) >= (state.room?.player_order?.length || 1) - 1;
+
+  if (state.swapMode) {
+    return renderSwapModal(state);
+  }
+
+  return `
     ${!state.replaceMode ? `
     <div class="superpowers">
       <button class="btn btn-sm btn-reroll ${me?.has_reroll ? '' : 'btn-superpower-used'}" data-action="reroll">
@@ -166,28 +168,13 @@ function renderMyTurn(state, me) {
       <button class="btn btn-sm btn-secondary" data-action="cancel-replace">Cancel Replace</button>
     </div>`}
 
-    <div class="video-options-section anim-slide-up">
-      <h3>STANDARD</h3>
-      <div class="video-grid">
-        ${standardVideos.map(v => `
-          <button class="video-option" data-action="select-video" data-value="${esc(v.title)}">
-            <span class="video-type-badge badge-standard">STD</span>
-            ${esc(v.title)}
-          </button>
-        `).join('')}
-      </div>
+    <div class="turn-instructions">
+      <p>Search YouTube for this term and pick your favorite video to show the group!</p>
     </div>
-    <div class="video-options-section">
-      <h3>WILDCARDS</h3>
-      <div class="video-grid">
-        ${wildcardVideos.map(v => `
-          <button class="video-option" data-action="select-video" data-value="${esc(v.title)}">
-            <span class="video-type-badge badge-wildcard">WILD</span>
-            ${esc(v.title)}
-          </button>
-        `).join('')}
-      </div>
-    </div>`;
+
+    <button class="btn ${isLastPlayer ? 'btn-gold' : 'btn-primary'} btn-lg btn-full" data-action="finish-turn">
+      ${isLastPlayer ? '✓ Done — Start Voting' : '✓ Done — Next Player'}
+    </button>`;
 }
 
 function renderSwapModal(state) {
@@ -208,40 +195,17 @@ function renderSwapModal(state) {
     </div>`;
 }
 
-function renderWaitingTurn(state, activePlayer) {
-  // Show what other players have already selected this round
-  const playerOrder = state.room?.player_order || [];
-  const currentIdx = state.room?.current_player_index || 0;
-  const selections = [];
-  for (let i = 0; i < currentIdx; i++) {
-    const pid = playerOrder[i];
-    const p = state.players.find(pl => pl.id === pid);
-    if (p?.selected_video) {
-      selections.push(p);
-    }
-  }
-
+// Waiting players see the search term + a waiting message
+function renderWaitingMessage(activePlayer) {
   return `
     <div class="waiting-view">
-      <div class="waiting-spinner">🎰</div>
-      <div class="waiting-name">${esc(activePlayer?.name || '???')}</div>
-      <div class="waiting-subtitle">is choosing a video...</div>
-
-      ${selections.length > 0 ? `
-        <div class="selections-so-far">
-          <h3>SELECTED THIS ROUND</h3>
-          ${selections.map(p => `
-            <div class="selection-item">
-              <span class="selection-player">${esc(p.name)}</span>
-              <span class="selection-video">${esc(p.selected_video)}</span>
-            </div>
-          `).join('')}
-        </div>` : ''}
+      <div class="waiting-spinner">🔍</div>
+      <div class="waiting-subtitle">Waiting for <strong>${esc(activePlayer?.name || '???')}</strong> to finish searching...</div>
     </div>`;
 }
 
 // ============================================================
-// VOTING
+// VOTING — vote for a player
 // ============================================================
 export function renderVoting(state) {
   const me = state.players.find(p => p.id === state.playerId);
@@ -249,33 +213,32 @@ export function renderVoting(state) {
   const votedCount = state.players.filter(p => p.vote_for).length;
   const totalPlayers = state.players.length;
 
-  // Only show players who have a selected video
-  const votablePlayers = state.players.filter(p => p.selected_video);
-
   return `
     <div class="voting-view anim-fade-in">
       <div class="voting-header">
-        <h1>Vote for Your Favorite!</h1>
-        <p class="voting-subtitle">Which video would you most want to watch?</p>
+        <h1>Vote for the Best!</h1>
+        <p class="voting-subtitle">Whose video was the most interesting?</p>
         <div class="vote-progress">${votedCount}/${totalPlayers} votes in</div>
       </div>
-      ${votablePlayers.map(p => `
-        <div class="vote-card ${me?.vote_for === p.id ? 'voted-for' : ''}">
-          <div class="vote-card-player">
-            <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:32px;height:32px;font-size:0.85rem">
-              ${p.name[0].toUpperCase()}
+      ${state.players.map(p => {
+        const isSelf = p.id === state.playerId;
+        const votedFor = me?.vote_for === p.id;
+        return `
+          <div class="vote-card ${votedFor ? 'voted-for' : ''}">
+            <div class="vote-card-player">
+              <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:36px;height:36px;font-size:0.85rem">
+                ${p.name[0].toUpperCase()}
+              </div>
+              <span class="vote-card-name">${esc(p.name)}${isSelf ? ' (you)' : ''}</span>
             </div>
-            <span class="vote-card-name">${esc(p.name)}</span>
-          </div>
-          <div class="vote-card-video">"${esc(p.selected_video)}"</div>
-          ${hasVoted
-            ? (me?.vote_for === p.id
-              ? '<div style="color:var(--teal);font-weight:600;font-size:0.85rem">✓ Your Vote</div>'
-              : '')
-            : `<button class="btn btn-sm btn-primary btn-full" data-action="cast-vote" data-value="${p.id}">Vote</button>`
-          }
-        </div>
-      `).join('')}
+            ${hasVoted
+              ? (votedFor
+                ? '<div style="color:var(--teal);font-weight:600;font-size:0.85rem">✓ Your Vote</div>'
+                : '')
+              : `<button class="btn btn-sm btn-primary btn-full" data-action="cast-vote" data-value="${p.id}">Vote</button>`
+            }
+          </div>`;
+      }).join('')}
       ${hasVoted ? '<p class="waiting-text">Waiting for other players to vote...</p>' : ''}
     </div>`;
 }
@@ -285,8 +248,7 @@ export function renderVoting(state) {
 // ============================================================
 export function renderResults(state) {
   const isHost = state.room?.host_id === state.playerId;
-  const { winnerId, points, isUnanimous, voteCounts } = tallyVotes(state);
-
+  const { winnerId, voteCounts } = tallyVotes(state);
   const winner = state.players.find(p => p.id === winnerId);
   const sorted = getSortedPlayers(state);
 
@@ -296,7 +258,7 @@ export function renderResults(state) {
         <h1>Round ${state.room?.round || 1} Results</h1>
         <div class="results-announcement">
           ${winner
-            ? `<span class="points-awarded">${esc(winner.name)} earns ${points} point${points > 1 ? 's' : ''}!${isUnanimous ? ' 🌟 Unanimous!' : ''}</span>`
+            ? `<span class="points-awarded">★ ${esc(winner.name)} earns 1 point!</span>`
             : '<span style="color:var(--text-muted)">It\'s a tie! No points awarded.</span>'
           }
         </div>
@@ -304,14 +266,13 @@ export function renderResults(state) {
 
       <div class="vote-breakdown">
         <h3>VOTE BREAKDOWN</h3>
-        ${state.players.filter(p => p.selected_video).map(p => {
+        ${state.players.map(p => {
           const votes = voteCounts[p.id] || 0;
           const isWinner = p.id === winnerId;
           return `
             <div class="breakdown-item ${isWinner ? 'is-winner' : ''}">
               <div class="breakdown-info">
                 <span class="breakdown-player">${isWinner ? '★ ' : ''}${esc(p.name)}</span>
-                <span class="breakdown-video">${esc(p.selected_video)}</span>
               </div>
               <span class="breakdown-votes">${votes} vote${votes !== 1 ? 's' : ''}</span>
             </div>`;
@@ -389,7 +350,7 @@ function getRankEmoji(index) {
   return ['🥇', '🥈', '🥉'][index] || `${index + 1}.`;
 }
 
-// Vote tally (also used in app.js, exported for reuse)
+// Vote tally: most votes = winner. Tie = no winner. Always 1 point.
 export function tallyVotes(state) {
   const voteCounts = {};
   state.players.forEach(p => {
@@ -398,21 +359,18 @@ export function tallyVotes(state) {
     }
   });
 
-  const voteValues = Object.values(voteCounts);
-  if (voteValues.length === 0) {
-    return { winnerId: null, points: 0, isUnanimous: false, voteCounts };
+  const entries = Object.entries(voteCounts);
+  if (entries.length === 0) {
+    return { winnerId: null, voteCounts };
   }
 
-  const maxVotes = Math.max(...voteValues);
-  const winners = Object.entries(voteCounts).filter(([_, c]) => c === maxVotes);
+  const maxVotes = Math.max(...entries.map(([_, c]) => c));
+  const winners = entries.filter(([_, c]) => c === maxVotes);
 
+  // Single winner → 1 point. Tie → no points.
   if (winners.length === 1) {
-    const winnerId = winners[0][0];
-    const isUnanimous = maxVotes === state.players.length;
-    const points = isUnanimous ? 2 : 1;
-    return { winnerId, points, isUnanimous, voteCounts };
+    return { winnerId: winners[0][0], voteCounts };
   }
 
-  // Tie — no points
-  return { winnerId: null, points: 0, isUnanimous: false, voteCounts };
+  return { winnerId: null, voteCounts };
 }

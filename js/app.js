@@ -37,7 +37,6 @@ const state = {
 // INIT
 // ============================================================
 async function init() {
-  // Generate or retrieve persistent player ID
   state.playerId = localStorage.getItem('yt_player_id');
   if (!state.playerId) {
     state.playerId = crypto.randomUUID();
@@ -46,7 +45,6 @@ async function init() {
 
   setupEventListeners();
 
-  // Try to rejoin an existing session
   const savedRoom = localStorage.getItem('yt_room_code');
   const savedName = localStorage.getItem('yt_player_name');
 
@@ -193,7 +191,6 @@ function handleRoomChange(payload) {
   const oldStatus = state.room?.status;
   state.room = payload.new;
 
-  // Reset local UI modes on turn/status change
   state.replaceMode = false;
   state.swapMode = false;
 
@@ -217,10 +214,10 @@ async function handlePlayerChange(payload) {
     state.players = state.players.filter(p => p.id !== payload.old?.id);
   }
 
-  // Host checks: all voted → tally
+  // Host auto-tally: when all players have voted
   if (isHost() && state.room?.status === 'voting' && !state.isProcessing) {
     const allVoted = state.players.every(p => p.vote_for);
-    if (allVoted) {
+    if (allVoted && state.players.length > 0) {
       state.isProcessing = true;
       await tallyAndAdvance();
       state.isProcessing = false;
@@ -231,7 +228,7 @@ async function handlePlayerChange(payload) {
 }
 
 // ============================================================
-// VIEW MANAGEMENT
+// VIEW MANAGEMENT — uses morphdom for flicker-free updates
 // ============================================================
 let renderTimer = null;
 function debouncedRender() {
@@ -246,14 +243,20 @@ function showView(name) {
 
 function render() {
   const app = document.getElementById('app');
+  let html = '';
   switch (state.currentView) {
-    case 'home': app.innerHTML = UI.renderHome(); break;
-    case 'lobby': app.innerHTML = UI.renderLobby(state); break;
-    case 'game': app.innerHTML = UI.renderGame(state); break;
-    case 'voting': app.innerHTML = UI.renderVoting(state); break;
-    case 'results': app.innerHTML = UI.renderResults(state); break;
-    case 'gameover': app.innerHTML = UI.renderGameOver(state); break;
+    case 'home': html = UI.renderHome(); break;
+    case 'lobby': html = UI.renderLobby(state); break;
+    case 'game': html = UI.renderGame(state); break;
+    case 'voting': html = UI.renderVoting(state); break;
+    case 'results': html = UI.renderResults(state); break;
+    case 'gameover': html = UI.renderGameOver(state); break;
   }
+
+  // morphdom patches the DOM in-place — no flicker, preserves focus/scroll
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  window.morphdom(app, temp, { childrenOnly: true });
   updateBadge();
 }
 
@@ -278,9 +281,6 @@ function viewForStatus(status) {
 function isHost() { return state.room?.host_id === state.playerId; }
 function getMe() { return state.players.find(p => p.id === state.playerId); }
 
-// ============================================================
-// SEARCH TERM & MOCK VIDEOS
-// ============================================================
 function generateSearchTerm() {
   let t = '';
   for (let i = 0; i < TERM_LENGTH; i++) t += CHARS[Math.floor(Math.random() * CHARS.length)];
@@ -300,48 +300,15 @@ function shuffle(arr) {
   return a;
 }
 
-function generateMockVideos(term) {
-  const t2 = generateSearchTerm();
-  const std = shuffle([
-    `What happens when you search "${term}"`,
-    `"${term}" — Nobody expected this...`,
-    `Searching "${term}" at 3AM (DO NOT TRY)`,
-    `I tried "${term}" for 24 hours straight`,
-    `Top 10 "${term}" moments caught on camera`,
-    `"${term}" explained in under 60 seconds`,
-    `Why "${term}" is trending worldwide right now`,
-    `"${term}" — The Documentary`,
-    `Reacting to "${term}" for the very first time`,
-    `"${term}" fails compilation #47`,
-    `POV: You just discovered "${term}"`,
-    `I let "${term}" control my life for a day`,
-  ]).slice(0, 3).map(title => ({ title, type: 'standard' }));
-
-  const wild = shuffle([
-    `♫ "${term}" (Official Music Video) ♫`,
-    `"${term}" ASMR — 10 Hours Relaxation`,
-    `"${term}" Speedrun World Record 4:32`,
-    `Gordon Ramsay tries "${term}"`,
-    `"${term}" vs "${t2}" — Epic Battle`,
-    `Baby's first "${term}" reaction`,
-    `Making "${term}" out of LEGO in real life`,
-    `"${term}" conspiracy theories that might be true`,
-    `"${term}" workout challenge — can you survive?`,
-  ]).slice(0, 3).map(title => ({ title, type: 'wildcard' }));
-
-  return [...std, ...wild];
-}
-
 // ============================================================
 // GAME ACTIONS
 // ============================================================
+
 async function startGame() {
   if (!isHost()) return;
   const order = shuffle(state.players.map(p => p.id));
   const term = generateSearchTerm();
-  const videos = generateMockVideos(term);
 
-  // Reset all players
   await db.from('yt_players').update({
     ready: false, score: 0,
     has_reroll: true, has_replace: true, has_swap: true,
@@ -350,7 +317,7 @@ async function startGame() {
 
   await db.from('yt_rooms').update({
     status: 'playing', player_order: order, current_player_index: 0,
-    current_search_term: term, round: 1, videos, past_terms: [],
+    current_search_term: term, round: 1, past_terms: [],
   }).eq('code', state.roomCode);
 }
 
@@ -361,15 +328,16 @@ async function toggleReady() {
     .eq('id', state.playerId).eq('room_code', state.roomCode);
 }
 
+// --- Superpowers ---
+
 async function useReroll() {
   const me = getMe();
   if (!me?.has_reroll) return;
   const oldTerm = state.room.current_search_term;
   const newTerm = generateSearchTerm();
-  const videos = generateMockVideos(newTerm);
 
   await db.from('yt_rooms').update({
-    current_search_term: newTerm, videos,
+    current_search_term: newTerm,
     past_terms: [...(state.room.past_terms || []), oldTerm],
   }).eq('code', state.roomCode);
 
@@ -383,9 +351,8 @@ async function useReplace(charIndex) {
   const chars = state.room.current_search_term.split('');
   chars[charIndex] = randomChar();
   const newTerm = chars.join('');
-  const videos = generateMockVideos(newTerm);
 
-  await db.from('yt_rooms').update({ current_search_term: newTerm, videos })
+  await db.from('yt_rooms').update({ current_search_term: newTerm })
     .eq('code', state.roomCode);
 
   await db.from('yt_players').update({ has_replace: false })
@@ -399,9 +366,8 @@ async function useSwap(termIndex) {
   if (!me?.has_swap) return;
   const past = state.room.past_terms || [];
   const newTerm = (termIndex !== undefined && past[termIndex]) ? past[termIndex] : generateSearchTerm();
-  const videos = generateMockVideos(newTerm);
 
-  await db.from('yt_rooms').update({ current_search_term: newTerm, videos })
+  await db.from('yt_rooms').update({ current_search_term: newTerm })
     .eq('code', state.roomCode);
 
   await db.from('yt_players').update({ has_swap: false })
@@ -410,26 +376,28 @@ async function useSwap(termIndex) {
   state.swapMode = false;
 }
 
-async function selectVideo(title) {
-  await db.from('yt_players').update({ selected_video: title })
-    .eq('id', state.playerId).eq('room_code', state.roomCode);
+// --- Turn management ---
 
+async function finishTurn() {
   const pastTerms = [...(state.room.past_terms || []), state.room.current_search_term];
   const nextIdx = (state.room.current_player_index || 0) + 1;
 
   if (nextIdx >= (state.room.player_order?.length || 0)) {
-    // All done → voting
+    // All players done → voting
     await db.from('yt_rooms').update({ status: 'voting', past_terms: pastTerms })
       .eq('code', state.roomCode);
   } else {
-    // Next turn
+    // Next player's turn
     const term = generateSearchTerm();
-    const videos = generateMockVideos(term);
     await db.from('yt_rooms').update({
-      current_player_index: nextIdx, current_search_term: term, videos, past_terms: pastTerms,
+      current_player_index: nextIdx,
+      current_search_term: term,
+      past_terms: pastTerms,
     }).eq('code', state.roomCode);
   }
 }
+
+// --- Voting & Scoring ---
 
 async function castVote(forPlayerId) {
   await db.from('yt_players').update({ vote_for: forPlayerId })
@@ -437,21 +405,20 @@ async function castVote(forPlayerId) {
 }
 
 async function tallyAndAdvance() {
-  // Recompute tally from current player data
   const { data: freshPlayers } = await db.from('yt_players').select().eq('room_code', state.roomCode);
   state.players = freshPlayers || [];
 
-  const { winnerId, points } = UI.tallyVotes(state);
+  const { winnerId } = UI.tallyVotes(state);
 
-  if (winnerId && points > 0) {
+  if (winnerId) {
     const winner = state.players.find(p => p.id === winnerId);
     if (winner) {
-      await db.from('yt_players').update({ score: winner.score + points })
+      await db.from('yt_players').update({ score: winner.score + 1 })
         .eq('id', winnerId).eq('room_code', state.roomCode);
     }
   }
 
-  // Re-fetch to get updated score
+  // Re-fetch updated scores
   const { data: updated } = await db.from('yt_players').select().eq('room_code', state.roomCode);
   state.players = updated || [];
 
@@ -460,18 +427,19 @@ async function tallyAndAdvance() {
     .eq('code', state.roomCode);
 }
 
+// --- Round management ---
+
 async function nextRound() {
   if (!isHost()) return;
   const nextRnd = (state.room.round || 1) + 1;
   const term = generateSearchTerm();
-  const videos = generateMockVideos(term);
 
   await db.from('yt_players').update({ selected_video: null, vote_for: null })
     .eq('room_code', state.roomCode);
 
   await db.from('yt_rooms').update({
     status: 'playing', round: nextRnd, current_player_index: 0,
-    current_search_term: term, videos,
+    current_search_term: term,
   }).eq('code', state.roomCode);
 }
 
@@ -479,7 +447,6 @@ async function playAgain() {
   if (!isHost()) return;
   const order = shuffle(state.players.map(p => p.id));
   const term = generateSearchTerm();
-  const videos = generateMockVideos(term);
 
   await db.from('yt_players').update({
     score: 0, has_reroll: true, has_replace: true, has_swap: true,
@@ -488,7 +455,7 @@ async function playAgain() {
 
   await db.from('yt_rooms').update({
     status: 'playing', round: 1, current_player_index: 0,
-    current_search_term: term, player_order: order, videos, past_terms: [],
+    current_search_term: term, player_order: order, past_terms: [],
   }).eq('code', state.roomCode);
 }
 
@@ -564,7 +531,7 @@ function setupEventListeners() {
       case 'cancel-swap': state.swapMode = false; render(); break;
       case 'swap-term': await useSwap(parseInt(value)); break;
       case 'swap-fresh': await useSwap(); break;
-      case 'select-video': await selectVideo(value); break;
+      case 'finish-turn': await finishTurn(); break;
       case 'cast-vote': await castVote(value); break;
       case 'next-round': await nextRound(); break;
       case 'play-again': await playAgain(); break;
@@ -572,7 +539,7 @@ function setupEventListeners() {
     }
   });
 
-  // Enter key support for inputs
+  // Enter key support
   document.getElementById('app').addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     if (e.target.id === 'create-name') document.querySelector('[data-action="create-game"]')?.click();
