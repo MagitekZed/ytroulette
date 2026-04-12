@@ -438,6 +438,14 @@ function showView(name) {
 
 function render() {
   const app = document.getElementById('app');
+
+  // Don't re-render while video is playing on hub — morphdom would destroy
+  // the YouTube iframe (YT API replaces <div> with <iframe>, causing tag mismatch)
+  if (state.isHub && state.room?.playback_status === 'playing') {
+    const ytIframe = app.querySelector('iframe#yt-player, #yt-player iframe');
+    if (ytIframe) return; // Video is alive, don't touch it
+  }
+
   let html = '';
 
   if (state.isHub) {
@@ -469,14 +477,7 @@ function render() {
 
   const temp = document.createElement('div');
   temp.innerHTML = html;
-  window.morphdom(app, temp, {
-    childrenOnly: true,
-    onBeforeElUpdated: (fromEl, toEl) => {
-      // Don't update the YouTube player iframe
-      if (fromEl.id === 'yt-player' && toEl.id === 'yt-player') return false;
-      return true;
-    },
-  });
+  window.morphdom(app, temp, { childrenOnly: true });
   updateBadge();
 }
 
