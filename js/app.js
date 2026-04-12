@@ -152,6 +152,15 @@ async function attemptHubRejoin(roomCode) {
     state.isHub = true;
     const { data: players } = await db.from('yt_players').select().eq('room_code', roomCode);
     state.players = players || [];
+
+    // Re-initialize YouTube player for hub
+    Hub.initPlayer(async () => {
+      if (state.room?.playback_status === 'playing') {
+        await db.from('yt_rooms').update({ playback_status: 'stopped' })
+          .eq('code', state.roomCode);
+      }
+    });
+
     subscribeToRoom(roomCode);
     showView(viewForStatus(room.status));
     return true;
@@ -200,6 +209,15 @@ async function createHubRoom(winScore) {
   state.roomCode = code;
   localStorage.setItem('yt_room_code', code);
   localStorage.setItem('yt_is_hub', 'true');
+
+  // Initialize YouTube player once (lives outside #app, persistent)
+  Hub.initPlayer(async () => {
+    if (state.room?.playback_status === 'playing') {
+      await db.from('yt_rooms').update({ playback_status: 'stopped' })
+        .eq('code', state.roomCode);
+    }
+  });
+
   await loadRoom(code);
   subscribeToRoom(code);
   showView('lobby');
@@ -450,14 +468,6 @@ function showView(name) {
 
 function render() {
   const app = document.getElementById('app');
-
-  // Don't re-render while video is playing on hub — morphdom would destroy
-  // the YouTube iframe (YT API replaces <div> with <iframe>, causing tag mismatch)
-  if (state.isHub && state.room?.playback_status === 'playing') {
-    const ytIframe = app.querySelector('iframe#yt-player, #yt-player iframe');
-    if (ytIframe) return; // Video is alive, don't touch it
-  }
-
   let html = '';
 
   if (state.isHub) {
@@ -999,23 +1009,6 @@ function setupEventListeners() {
     if (e.target.id === 'join-code' || e.target.id === 'join-name') document.querySelector('[data-action="join-game"]')?.click();
   });
 }
-
-// ============================================================
-// Initialize YouTube player for Hub when video container appears
-// ============================================================
-const hubPlayerObserver = new MutationObserver(() => {
-  const container = document.getElementById('yt-player');
-  if (container && state.isHub && !Hub.isPlayerReady()) {
-    Hub.initPlayer('yt-player', async () => {
-      // Video ended naturally — auto-stop
-      if (state.room?.playback_status === 'playing') {
-        await db.from('yt_rooms').update({ playback_status: 'stopped' })
-          .eq('code', state.roomCode);
-      }
-    });
-  }
-});
-hubPlayerObserver.observe(document.getElementById('app'), { childList: true, subtree: true });
 
 // ============================================================
 // START

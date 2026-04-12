@@ -468,8 +468,12 @@ export function renderHubGame(state) {
           <span class="hub-game-info">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns} · ${esc(activePlayer?.name || '???')}'s Pick</span>
           <span class="hub-room-code">ROOM: ${state.roomCode}</span>
         </div>
-        <div class="hub-main hub-video-area">
-          <div id="yt-player"></div>
+        <div class="hub-main">
+          <div class="hub-stopped-message">
+            <div style="font-size:3rem;margin-bottom:16px">▶️</div>
+            <h2>Now Playing</h2>
+            <p style="color:var(--text-muted)">${selectedVideo ? esc(selectedVideo.title) : 'Loading video...'}</p>
+          </div>
         </div>
         ${renderHubAdminBar(state)}
       </div>`;

@@ -1551,3 +1551,21 @@ input[type="text"]:focus { border-color: var(--red); }
   font-size: 1.4rem;
   font-weight: 700;
 }
+
+/* ============================================================
+   PERSISTENT YOUTUBE PLAYER WRAPPER (outside #app)
+   ============================================================ */
+.yt-player-wrapper {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: #000;
+}
+.yt-player-wrapper.hidden {
+  display: none;
+}
+.yt-player-wrapper iframe,
+.yt-player-wrapper #yt-player {
+  width: 100% !important;
+  height: 100% !important;
+}

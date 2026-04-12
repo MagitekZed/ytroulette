@@ -1,100 +1,79 @@
 // ============================================================
 // YouTube Roulette — Hub Video Controller (hub.js)
 // YouTube IFrame API integration for the hub display
+// Player lives in a persistent #yt-player-wrapper outside #app
 // ============================================================
 
 let player = null;
 let playerReady = false;
 let onVideoEndCallback = null;
 let pendingVideoId = null;
-let currentContainerId = null;
+let initAttempted = false;
 
-// Initialize the YouTube IFrame API player
-export function initPlayer(containerId, onEnd) {
+// Initialize the YouTube IFrame API player (call once at hub startup)
+export function initPlayer(onEnd) {
+  if (initAttempted) return;
+  initAttempted = true;
   onVideoEndCallback = onEnd;
-  currentContainerId = containerId;
 
-  // Check if the old player's iframe is still in the DOM
-  if (player && playerReady) {
-    const iframe = document.querySelector(`#${containerId} iframe, iframe#${containerId}`);
-    if (iframe && iframe.parentNode) {
-      // Player is still alive in the DOM
-      return;
-    }
-    // Player's DOM element was destroyed — clean up
-    console.log('YouTube player DOM destroyed, re-creating...');
-    player = null;
-    playerReady = false;
-  }
-
-  // If we already have a player object but it's not ready, destroy and retry
-  if (player && !playerReady) {
-    try { player.destroy(); } catch { /* ignore */ }
-    player = null;
-  }
-
-  // If API is already loaded, create player directly
   if (window.YT && window.YT.Player) {
-    createPlayer(containerId);
-    return;
+    createPlayer();
+  } else {
+    window.onYouTubeIframeAPIReady = () => createPlayer();
   }
-
-  // Set up the callback for when the API loads
-  window.onYouTubeIframeAPIReady = () => createPlayer(containerId);
 }
 
-function createPlayer(containerId) {
-  const el = document.getElementById(containerId);
+function createPlayer() {
+  const el = document.getElementById('yt-player');
   if (!el) {
-    console.warn('YouTube player container not found:', containerId);
+    console.error('yt-player element not found');
     return;
   }
 
-  try {
-    player = new window.YT.Player(containerId, {
-      width: '100%',
-      height: '100%',
-      playerVars: {
-        autoplay: 0,
-        controls: 1,
-        modestbranding: 1,
-        rel: 0,
-        fs: 1,
-        playsinline: 1,
+  player = new window.YT.Player('yt-player', {
+    width: '100%',
+    height: '100%',
+    playerVars: {
+      autoplay: 0,
+      controls: 1,
+      modestbranding: 1,
+      rel: 0,
+      fs: 1,
+      playsinline: 1,
+    },
+    events: {
+      onReady: () => {
+        console.log('YouTube player ready');
+        playerReady = true;
+        if (pendingVideoId) {
+          const vid = pendingVideoId;
+          pendingVideoId = null;
+          playVideo(vid);
+        }
       },
-      events: {
-        onReady: () => {
-          console.log('YouTube player ready');
-          playerReady = true;
-          // Play any queued video
-          if (pendingVideoId) {
-            const vid = pendingVideoId;
-            pendingVideoId = null;
-            playVideo(vid);
-          }
-        },
-        onStateChange: onPlayerStateChange,
-        onError: onPlayerError,
+      onStateChange: (event) => {
+        if (event.data === 0 && onVideoEndCallback) {
+          onVideoEndCallback();
+        }
       },
-    });
-  } catch (err) {
-    console.error('Failed to create YouTube player:', err);
-    player = null;
-    playerReady = false;
-  }
+      onError: (event) => {
+        console.error('YouTube player error:', event.data);
+        if (onVideoEndCallback) onVideoEndCallback();
+      },
+    },
+  });
 }
 
-function onPlayerStateChange(event) {
-  // YT.PlayerState.ENDED === 0
-  if (event.data === 0 && onVideoEndCallback) {
-    onVideoEndCallback();
-  }
+// Show the player wrapper (fullscreen over the hub area)
+export function showPlayer() {
+  document.getElementById('yt-player-wrapper')?.classList.remove('hidden');
 }
 
-function onPlayerError(event) {
-  console.error('YouTube player error:', event.data);
-  if (onVideoEndCallback) {
-    onVideoEndCallback();
+// Hide the player wrapper
+export function hidePlayer() {
+  document.getElementById('yt-player-wrapper')?.classList.add('hidden');
+  if (player && playerReady) {
+    try { player.stopVideo(); } catch { /* ignore */ }
   }
 }
 
@@ -108,13 +87,13 @@ export function playVideo(videoId) {
     return;
   }
 
+  showPlayer();
   try {
     player.loadVideoById(videoId);
     pendingVideoId = null;
   } catch (err) {
     console.error('Failed to load video:', err);
     pendingVideoId = videoId;
-    // Retry after a short delay
     setTimeout(() => {
       if (pendingVideoId === videoId && player && playerReady) {
         pendingVideoId = null;
@@ -127,14 +106,14 @@ export function playVideo(videoId) {
 // Stop playback
 export function stopVideo() {
   pendingVideoId = null;
-  if (player && playerReady) {
-    try { player.stopVideo(); } catch { /* ignore */ }
-  }
+  hidePlayer();
 }
 
 // Destroy the player instance
 export function destroyPlayer() {
   pendingVideoId = null;
+  initAttempted = false;
+  hidePlayer();
   if (player) {
     try { player.destroy(); } catch { /* ignore */ }
     player = null;
@@ -144,20 +123,7 @@ export function destroyPlayer() {
 
 // Check if player is ready
 export function isPlayerReady() {
-  // Also verify the DOM element still exists
-  if (playerReady && player) {
-    if (currentContainerId) {
-      const el = document.getElementById(currentContainerId);
-      if (!el) {
-        // DOM was destroyed
-        player = null;
-        playerReady = false;
-        return false;
-      }
-    }
-    return true;
-  }
-  return false;
+  return playerReady;
 }
 
 // ============================================================
