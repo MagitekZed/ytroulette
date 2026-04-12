@@ -700,12 +700,13 @@ async function tallyAndAdvance() {
   const { data: freshPlayers } = await db.from('yt_players').select().eq('room_code', state.roomCode);
   state.players = freshPlayers || [];
 
-  const { winnerId } = UI.tallyVotes(state);
+  const { winnerId, isUnanimous } = UI.tallyVotes(state);
 
   if (winnerId) {
     const winner = state.players.find(p => p.id === winnerId);
     if (winner) {
-      const newScore = (winner.score || 0) + 1;
+      const points = (isUnanimous && state.players.length >= 3) ? 2 : 1;
+      const newScore = (winner.score || 0) + points;
       await db.from('yt_players').update({ score: newScore })
         .eq('id', winnerId).eq('room_code', state.roomCode);
     }

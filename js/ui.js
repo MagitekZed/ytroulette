@@ -323,6 +323,14 @@ export function renderVoting(state) {
               }
             </div>`;
         }).join('')}
+        ${!hasVoted ? `
+          <div class="vote-card">
+            <div class="vote-card-player">
+              <span class="vote-card-name" style="color:var(--text-muted)">🚫 No Winner</span>
+            </div>
+            <button class="btn btn-sm btn-secondary btn-full" data-action="cast-vote" data-value="none">Vote No Winner</button>
+          </div>` : ''}
+        ${hasVoted && me?.vote_for === 'none' ? '<div style="color:var(--text-muted);font-weight:600;font-size:0.85rem;text-align:center;padding:8px">✓ You voted No Winner</div>' : ''}
         ${hasVoted ? '<p class="waiting-text">Waiting for other players to vote...</p>' : ''}
       </div>
       <button class="btn btn-text" data-action="leave-game">Leave Game</button>
@@ -334,9 +342,10 @@ export function renderVoting(state) {
 // ============================================================
 export function renderResults(state) {
   const isHost = state.room?.host_id === state.playerId;
-  const { winnerId, voteCounts } = tallyVotes(state);
+  const { winnerId, voteCounts, isUnanimous } = tallyVotes(state);
   const winner = state.players.find(p => p.id === winnerId);
   const sorted = getSortedPlayers(state);
+  const pointsAwarded = (isUnanimous && state.players.length >= 3) ? 2 : 1;
 
   return `
     <div class="results-view anim-fade-in">
@@ -344,8 +353,8 @@ export function renderResults(state) {
         <h1>Round ${state.room?.round || 1} Results</h1>
         <div class="results-announcement">
           ${winner
-            ? `<span class="points-awarded">★ ${esc(winner.name)} earns 1 point!</span>`
-            : '<span style="color:var(--text-muted)">It\'s a tie! No points awarded.</span>'}
+            ? `<span class="points-awarded">★ ${esc(winner.name)} earns ${pointsAwarded} point${pointsAwarded > 1 ? 's' : ''}!${isUnanimous ? ' (Unanimous!)' : ''}</span>`
+            : '<span style="color:var(--text-muted)">No winner this round.</span>'}
         </div>
       </div>
       <div class="scrollable-content">
@@ -564,10 +573,14 @@ export function renderHubGame(state) {
 // --- Hub Voting ---
 export function renderHubVoting(state) {
   const { voteCounts } = tallyVotes(state);
-  const orderSet = new Set(state.room?.player_order || []);
-  const votingPlayers = state.players.filter(p => orderSet.has(p.id));
+  const playerOrder = state.room?.player_order || [];
+  // Show players in the order they played (stable, won't reorder on vote)
+  const votingPlayers = playerOrder
+    .map(id => state.players.find(p => p.id === id))
+    .filter(Boolean);
   const votedCount = state.players.filter(p => p.vote_for).length;
   const totalPlayers = state.players.length;
+  const noneVotes = state.players.filter(p => p.vote_for === 'none').length;
 
   return `
     <div class="hub-layout">
@@ -575,8 +588,8 @@ export function renderHubVoting(state) {
         <span class="hub-game-info">VOTING · ${votedCount}/${totalPlayers} votes in</span>
         <span class="hub-room-code">ROOM: ${state.roomCode}</span>
       </div>
-      <div class="hub-main">
-        <h1 style="text-align:center;font-family:var(--font-heading);margin-bottom:24px;font-size:2rem">Vote for the Best!</h1>
+      <div class="hub-main" style="flex-direction:column;gap:24px;padding:24px">
+        <h1 style="text-align:center;font-family:var(--font-heading);font-size:2rem;flex-shrink:0">Cast Your Vote!</h1>
         <div class="hub-vote-grid">
           ${votingPlayers.map(p => {
             const votes = voteCounts[p.id] || 0;
@@ -590,6 +603,14 @@ export function renderHubVoting(state) {
                 </div>
               </div>`;
           }).join('')}
+          ${noneVotes > 0 ? `
+            <div class="hub-vote-card">
+              <div class="hub-vote-thumb-empty">🚫</div>
+              <div class="hub-vote-info">
+                <div class="hub-vote-player" style="color:var(--text-muted)">No Winner</div>
+                <div class="hub-vote-count">${noneVotes} vote${noneVotes !== 1 ? 's' : ''}</div>
+              </div>
+            </div>` : ''}
         </div>
       </div>
       ${renderHubAdminBar(state)}
@@ -598,10 +619,11 @@ export function renderHubVoting(state) {
 
 // --- Hub Results ---
 export function renderHubResults(state) {
-  const { winnerId, voteCounts } = tallyVotes(state);
+  const { winnerId, voteCounts, isUnanimous } = tallyVotes(state);
   const winner = state.players.find(p => p.id === winnerId);
   const sorted = getSortedPlayers(state);
   const winScore = state.room?.win_score || 3;
+  const pointsAwarded = (isUnanimous && state.players.length >= 3) ? 2 : 1;
 
   return `
     <div class="hub-layout">
@@ -613,8 +635,8 @@ export function renderHubResults(state) {
         <div class="hub-results-content">
           <div class="hub-results-announcement">
             ${winner
-              ? `<div class="hub-winner-name" style="color:${getPlayerColor(winner.id)}">★ ${esc(winner.name)} earns 1 point!</div>`
-              : '<div style="color:var(--text-muted);font-size:1.5rem">It\'s a tie! No points awarded.</div>'}
+              ? `<div class="hub-winner-name" style="color:${getPlayerColor(winner.id)}">★ ${esc(winner.name)} earns ${pointsAwarded} point${pointsAwarded > 1 ? 's' : ''}!${isUnanimous ? ' 🔥 Unanimous!' : ''}</div>`
+              : '<div style="color:var(--text-muted);font-size:1.5rem">No winner this round.</div>'}
           </div>
           <div class="hub-scoreboard">
             ${sorted.map((p, i) => `
@@ -748,13 +770,24 @@ export function renderHostEnded() {
 
 export function tallyVotes(state) {
   const voteCounts = {};
+  let totalVoters = 0;
   state.players.forEach(p => {
-    if (p.vote_for) voteCounts[p.vote_for] = (voteCounts[p.vote_for] || 0) + 1;
+    if (p.vote_for) {
+      totalVoters++;
+      // 'none' votes count but don't go toward any player
+      if (p.vote_for !== 'none') {
+        voteCounts[p.vote_for] = (voteCounts[p.vote_for] || 0) + 1;
+      }
+    }
   });
   const entries = Object.entries(voteCounts);
-  if (entries.length === 0) return { winnerId: null, voteCounts };
+  if (entries.length === 0) return { winnerId: null, voteCounts, isUnanimous: false };
   const maxVotes = Math.max(...entries.map(([_, c]) => c));
   const winners = entries.filter(([_, c]) => c === maxVotes);
-  if (winners.length === 1) return { winnerId: winners[0][0], voteCounts };
-  return { winnerId: null, voteCounts };
+  if (winners.length === 1) {
+    const winnerId = winners[0][0];
+    const isUnanimous = maxVotes === totalVoters && totalVoters >= 3;
+    return { winnerId, voteCounts, isUnanimous };
+  }
+  return { winnerId: null, voteCounts, isUnanimous: false };
 }

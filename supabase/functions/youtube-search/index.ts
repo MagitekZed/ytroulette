@@ -140,10 +140,12 @@ serve(async (req) => {
       if (r.type === "video") {
         const details = videoDetails[r.videoId];
         if (!details || !details.embeddable) continue; // Skip non-embeddable
+        const durationSeconds = parseDuration(details.duration);
+        if (durationSeconds <= 60) continue; // Skip YouTube Shorts
         enriched.push({
           ...r,
           duration: details.duration,
-          durationSeconds: parseDuration(details.duration),
+          durationSeconds,
         });
       } else if (r.type === "playlist") {
         const firstVid = playlistFirstVideo[r.playlistId];
