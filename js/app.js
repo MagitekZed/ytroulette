@@ -351,33 +351,23 @@ async function handlePlayerChange(payload) {
 function handleHubPlaybackChange() {
   if (!state.isHub) return;
 
-  // Always render first so the DOM (#yt-player div) is updated
+  // Always render first
   debouncedRender();
 
   if (state.room.playback_status === 'playing') {
-    // Small delay to let the render + MutationObserver create the player
     setTimeout(async () => {
-      const results = state.room.search_results || [];
-      const idx = state.room.selected_video_index;
-      const video = results[idx];
+      // Use the video ID stored directly on the room — no stale index lookup
+      const videoId = state.room.selected_video_id;
 
-      if (!video) {
-        console.error('No video at index', idx);
-        await db.from('yt_rooms').update({ playback_status: 'stopped' })
-          .eq('code', state.roomCode);
-        return;
-      }
-
-      const videoId = video.type === 'playlist' ? video.firstVideoId : video.videoId;
       if (!videoId) {
-        console.error('No playable video ID for:', video.title);
-        toast('This video/playlist can\'t be played. Skipping...', 'error');
+        console.error('No video ID on room for playback');
+        toast('This video can\'t be played. Skipping...', 'error');
         await db.from('yt_rooms').update({ playback_status: 'stopped' })
           .eq('code', state.roomCode);
         return;
       }
 
-      Hub.playVideo(videoId); // Will queue if player not ready yet
+      Hub.playVideo(videoId);
     }, 200);
   } else if (state.room.playback_status === 'stopped') {
     Hub.stopVideo();
@@ -435,7 +425,7 @@ async function triggerSearch() {
     // Store results and set status
     await db.from('yt_rooms').update({
       search_results: pool,
-      selected_video_index: null,
+      selected_video_index: null, selected_video_id: null,
       playback_status: 'selecting',
     }).eq('code', state.roomCode);
 
@@ -567,7 +557,7 @@ async function startGame() {
   await db.from('yt_rooms').update({
     status: 'playing', player_order: order, current_player_index: 0,
     current_search_term: term, round: 1, past_terms: [],
-    search_results: [], selected_video_index: null, playback_status: 'idle',
+    search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
   }).eq('code', state.roomCode);
 }
 
@@ -589,7 +579,7 @@ async function useReroll() {
   await db.from('yt_rooms').update({
     current_search_term: newTerm,
     past_terms: [...(state.room.past_terms || []), oldTerm],
-    playback_status: 'idle', search_results: [], selected_video_index: null,
+    playback_status: 'idle', search_results: [], selected_video_index: null, selected_video_id: null,
   }).eq('code', state.roomCode);
 
   await db.from('yt_players').update({ has_reroll: false })
@@ -605,7 +595,7 @@ async function useReplace(charIndex, chosenChar) {
 
   await db.from('yt_rooms').update({
     current_search_term: newTerm,
-    playback_status: 'idle', search_results: [], selected_video_index: null,
+    playback_status: 'idle', search_results: [], selected_video_index: null, selected_video_id: null,
   }).eq('code', state.roomCode);
 
   await db.from('yt_players').update({ has_replace: false })
@@ -624,7 +614,7 @@ async function useSwap(idx1, idx2) {
 
   await db.from('yt_rooms').update({
     current_search_term: newTerm,
-    playback_status: 'idle', search_results: [], selected_video_index: null,
+    playback_status: 'idle', search_results: [], selected_video_index: null, selected_video_id: null,
   }).eq('code', state.roomCode);
 
   await db.from('yt_players').update({ has_swap: false })
@@ -640,19 +630,26 @@ async function selectVideo(index) {
   // Store picked video info on the player's row
   const results = state.room.search_results || [];
   const video = results[index];
-  if (!video) return;
+  if (!video) {
+    toast('Video not found. Try another.', 'error');
+    return;
+  }
 
   const me = getMe();
   if (!me) return;
 
+  const videoId = video.type === 'playlist' ? video.firstVideoId : video.videoId;
+
   await db.from('yt_players').update({
-    picked_video_id: video.type === 'playlist' ? video.firstVideoId : video.videoId,
+    picked_video_id: videoId,
     picked_video_title: video.title,
     picked_video_thumbnail: video.type === 'playlist' ? video.firstVideoThumbnail : video.thumbnail,
   }).eq('id', state.playerId).eq('room_code', state.roomCode);
 
+  // Store video ID directly on room — avoids stale index lookups
   await db.from('yt_rooms').update({
     selected_video_index: index,
+    selected_video_id: videoId,
     playback_status: 'playing',
   }).eq('code', state.roomCode);
 }
@@ -678,7 +675,7 @@ async function finishTurn() {
     // All players done → voting
     await db.from('yt_rooms').update({
       status: 'voting', past_terms: pastTerms,
-      playback_status: 'idle', search_results: [], selected_video_index: null,
+      playback_status: 'idle', search_results: [], selected_video_index: null, selected_video_id: null,
     }).eq('code', state.roomCode);
   } else {
     // Next player's turn
@@ -687,7 +684,7 @@ async function finishTurn() {
       current_player_index: nextIdx,
       current_search_term: term,
       past_terms: pastTerms,
-      playback_status: 'idle', search_results: [], selected_video_index: null,
+      playback_status: 'idle', search_results: [], selected_video_index: null, selected_video_id: null,
     }).eq('code', state.roomCode);
   }
 }
@@ -749,7 +746,7 @@ async function nextRound() {
   await db.from('yt_rooms').update({
     status: 'playing', round: nextRnd, current_player_index: 0,
     current_search_term: term, player_order: finalOrder,
-    search_results: [], selected_video_index: null, playback_status: 'idle',
+    search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
   }).eq('code', state.roomCode);
 }
 
@@ -767,7 +764,7 @@ async function playAgain() {
   await db.from('yt_rooms').update({
     status: state.isHub ? 'lobby' : 'playing', round: 1, current_player_index: 0,
     current_search_term: term, player_order: order, past_terms: [],
-    search_results: [], selected_video_index: null, playback_status: 'idle',
+    search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
   }).eq('code', state.roomCode);
 }
 
@@ -828,7 +825,7 @@ async function kickPlayer(playerId) {
         await db.from('yt_rooms').update({
           player_order: newOrder, current_player_index: newIdx,
           current_search_term: term,
-          playback_status: 'idle', search_results: [], selected_video_index: null,
+          playback_status: 'idle', search_results: [], selected_video_index: null, selected_video_id: null,
         }).eq('code', state.roomCode);
       }
     } else if (state.room.status === 'playing' && kickedIdx >= 0) {
@@ -856,7 +853,7 @@ async function skipPlayer() {
 async function reSearch() {
   if (!state.isHub) return;
   await db.from('yt_rooms').update({
-    playback_status: 'idle', search_results: [], selected_video_index: null,
+    playback_status: 'idle', search_results: [], selected_video_index: null, selected_video_id: null,
   }).eq('code', state.roomCode);
   await triggerSearch();
 }
