@@ -208,8 +208,72 @@ serve(async (req) => {
       return true;
     });
 
+    const videoCount = finalResults.filter(r => r.type === "video").length;
     const shortsRemoved = shortsSet.size;
-    console.log(`Shorts detection: checked ${videosToShortsCheck.length} videos, found ${shortsRemoved} Shorts`);
+    console.log(`Shorts detection: checked ${videosToShortsCheck.length} videos, found ${shortsRemoved} Shorts, ${videoCount} videos remain`);
+
+    // Step 6: Supplementary search if too few videos after filtering
+    // Use videoDuration=medium (4-20min) which inherently excludes Shorts
+    if (videoCount < 5) {
+      console.log(`Only ${videoCount} videos — running supplementary video-only search`);
+      const existingIds = new Set(finalResults.filter(r => r.type === "video").map(r => r.videoId));
+
+      const suppUrl = new URL("https://www.googleapis.com/youtube/v3/search");
+      suppUrl.searchParams.set("part", "snippet");
+      suppUrl.searchParams.set("q", term);
+      suppUrl.searchParams.set("type", "video");
+      suppUrl.searchParams.set("videoDuration", "medium"); // 4-20 min, no Shorts
+      suppUrl.searchParams.set("maxResults", "20");
+      suppUrl.searchParams.set("safeSearch", "none");
+      suppUrl.searchParams.set("key", YOUTUBE_API_KEY);
+
+      try {
+        const suppRes = await fetch(suppUrl.toString());
+        const suppData = await suppRes.json();
+        const suppItems = (suppData.items || []).filter(
+          (item: any) => item.id?.videoId && !existingIds.has(item.id.videoId)
+        );
+
+        if (suppItems.length > 0) {
+          // Batch fetch details for supplementary videos
+          const suppVideoIds = suppItems.map((item: any) => item.id.videoId);
+          const suppDetailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
+          suppDetailsUrl.searchParams.set("part", "contentDetails,status");
+          suppDetailsUrl.searchParams.set("id", suppVideoIds.join(","));
+          suppDetailsUrl.searchParams.set("key", YOUTUBE_API_KEY);
+
+          const suppDetailsRes = await fetch(suppDetailsUrl.toString());
+          const suppDetailsData = await suppDetailsRes.json();
+          const suppDetails: Record<string, { duration: string; embeddable: boolean }> = {};
+          for (const v of (suppDetailsData.items || [])) {
+            suppDetails[v.id] = {
+              duration: v.contentDetails?.duration || "PT0S",
+              embeddable: v.status?.embeddable ?? false,
+            };
+          }
+
+          for (const item of suppItems) {
+            const vid = item.id.videoId;
+            const details = suppDetails[vid];
+            if (!details || !details.embeddable) continue;
+            finalResults.push({
+              type: "video",
+              videoId: vid,
+              channelId: item.snippet.channelId,
+              title: item.snippet.title,
+              thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || "",
+              channelTitle: item.snippet.channelTitle,
+              publishedAt: item.snippet.publishedAt,
+              duration: details.duration,
+              durationSeconds: parseDuration(details.duration),
+            });
+          }
+          console.log(`Supplementary search added ${finalResults.filter(r => r.type === "video").length - videoCount} more videos`);
+        }
+      } catch (e) {
+        console.error("Supplementary search failed:", e);
+      }
+    }
 
     return new Response(JSON.stringify({ results: finalResults }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

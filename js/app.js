@@ -80,10 +80,14 @@ async function init() {
     try {
       const oldStatus = state.room?.status;
       const oldPlayback = state.room?.playback_status;
+      const oldTerm = state.room?.current_search_term;
       await loadRoom(state.roomCode);
 
       if (state.room?.status !== oldStatus) {
         showView(viewForStatus(state.room.status));
+      } else if (state.isHub && oldTerm !== state.room?.current_search_term) {
+        // Term changed (superpower) — re-search takes priority
+        await triggerSearch();
       } else if (state.isHub && state.room?.playback_status !== oldPlayback) {
         handleHubPlaybackChange();
       } else {
