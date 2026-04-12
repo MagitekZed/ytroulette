@@ -31,7 +31,9 @@ const state = {
   currentView: 'home',
   channel: null,
   replaceMode: false,
+  replaceCharIndex: null,
   swapMode: false,
+  swapFirstIndex: null,
   isProcessing: false,
 };
 
@@ -73,7 +75,9 @@ function clearSession() {
   state.players = [];
   state.playerName = null;
   state.replaceMode = false;
+  state.replaceCharIndex = null;
   state.swapMode = false;
+  state.swapFirstIndex = null;
   if (state.channel) {
     db.removeChannel(state.channel);
     state.channel = null;
@@ -194,7 +198,9 @@ function handleRoomChange(payload) {
   state.room = payload.new;
 
   state.replaceMode = false;
+  state.replaceCharIndex = null;
   state.swapMode = false;
+  state.swapFirstIndex = null;
 
   if (oldStatus !== state.room.status) {
     showView(viewForStatus(state.room.status));
@@ -352,11 +358,11 @@ async function useReroll() {
     .eq('id', state.playerId).eq('room_code', state.roomCode);
 }
 
-async function useReplace(charIndex) {
+async function useReplace(charIndex, chosenChar) {
   const me = getMe();
   if (!me?.has_replace) return;
   const chars = state.room.current_search_term.split('');
-  chars[charIndex] = randomChar();
+  chars[charIndex] = chosenChar.toUpperCase();
   const newTerm = chars.join('');
 
   await db.from('yt_rooms').update({ current_search_term: newTerm })
@@ -366,13 +372,15 @@ async function useReplace(charIndex) {
     .eq('id', state.playerId).eq('room_code', state.roomCode);
 
   state.replaceMode = false;
+  state.replaceCharIndex = null;
 }
 
-async function useSwap(termIndex) {
+async function useSwap(idx1, idx2) {
   const me = getMe();
   if (!me?.has_swap) return;
-  const past = state.room.past_terms || [];
-  const newTerm = (termIndex !== undefined && past[termIndex]) ? past[termIndex] : generateSearchTerm();
+  const chars = state.room.current_search_term.split('');
+  [chars[idx1], chars[idx2]] = [chars[idx2], chars[idx1]];
+  const newTerm = chars.join('');
 
   await db.from('yt_rooms').update({ current_search_term: newTerm })
     .eq('code', state.roomCode);
@@ -381,6 +389,7 @@ async function useSwap(termIndex) {
     .eq('id', state.playerId).eq('room_code', state.roomCode);
 
   state.swapMode = false;
+  state.swapFirstIndex = null;
 }
 
 // --- Turn management ---
@@ -532,21 +541,56 @@ function setupEventListeners() {
       case 'toggle-ready': await toggleReady(); break;
       case 'start-game': await startGame(); break;
       case 'reroll': await useReroll(); break;
-      case 'enter-replace': state.replaceMode = true; render(); break;
-      case 'cancel-replace': state.replaceMode = false; render(); break;
-      case 'replace-char': await useReplace(parseInt(value)); break;
-      case 'enter-swap':
-        if (!(state.room?.past_terms?.length)) { await useSwap(); }
-        else { state.swapMode = true; render(); }
+      case 'enter-replace':
+        state.replaceMode = true;
+        state.replaceCharIndex = null;
+        render();
         break;
-      case 'cancel-swap': state.swapMode = false; render(); break;
-      case 'swap-term': await useSwap(parseInt(value)); break;
-      case 'swap-fresh': await useSwap(); break;
+      case 'cancel-replace':
+        state.replaceMode = false;
+        state.replaceCharIndex = null;
+        render();
+        break;
+      case 'replace-char':
+        state.replaceCharIndex = parseInt(value);
+        render();
+        setTimeout(() => document.getElementById('replace-char-input')?.focus(), 50);
+        break;
+      case 'enter-swap':
+        state.swapMode = true;
+        state.swapFirstIndex = null;
+        render();
+        break;
+      case 'cancel-swap':
+        state.swapMode = false;
+        state.swapFirstIndex = null;
+        render();
+        break;
+      case 'swap-char': {
+        const idx = parseInt(value);
+        if (state.swapFirstIndex === null) {
+          state.swapFirstIndex = idx;
+          render();
+        } else if (state.swapFirstIndex !== idx) {
+          await useSwap(state.swapFirstIndex, idx);
+        }
+        break;
+      }
       case 'finish-turn': await finishTurn(); break;
       case 'cast-vote': await castVote(value); break;
       case 'next-round': await nextRound(); break;
       case 'play-again': await playAgain(); break;
       case 'leave-game': await leaveGame(); break;
+    }
+  });
+
+  // Replace character input handler
+  document.getElementById('app').addEventListener('input', async (e) => {
+    if (e.target.id === 'replace-char-input' && state.replaceCharIndex !== null) {
+      const val = e.target.value;
+      if (val.length > 0) {
+        await useReplace(state.replaceCharIndex, val.slice(-1));
+      }
     }
   });
 
