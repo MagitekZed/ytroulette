@@ -338,16 +338,28 @@ function handleHubPlaybackChange() {
 
   if (state.room.playback_status === 'playing') {
     // Small delay to let the render + MutationObserver create the player
-    setTimeout(() => {
+    setTimeout(async () => {
       const results = state.room.search_results || [];
       const idx = state.room.selected_video_index;
       const video = results[idx];
-      if (video) {
-        const videoId = video.type === 'playlist' ? video.firstVideoId : video.videoId;
-        if (videoId) {
-          Hub.playVideo(videoId); // Will queue if player not ready yet
-        }
+
+      if (!video) {
+        console.error('No video at index', idx);
+        await db.from('yt_rooms').update({ playback_status: 'stopped' })
+          .eq('code', state.roomCode);
+        return;
       }
+
+      const videoId = video.type === 'playlist' ? video.firstVideoId : video.videoId;
+      if (!videoId) {
+        console.error('No playable video ID for:', video.title);
+        toast('This video/playlist can\'t be played. Skipping...', 'error');
+        await db.from('yt_rooms').update({ playback_status: 'stopped' })
+          .eq('code', state.roomCode);
+        return;
+      }
+
+      Hub.playVideo(videoId); // Will queue if player not ready yet
     }, 200);
   } else if (state.room.playback_status === 'stopped') {
     Hub.stopVideo();
