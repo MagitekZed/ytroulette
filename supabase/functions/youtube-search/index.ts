@@ -156,31 +156,29 @@ serve(async (req) => {
       }
     }
 
-    // Step 4: Build enriched results (filter non-embeddable + title-based #shorts)
+    // Step 4: Build enriched results (filter non-embeddable, #shorts titles, ultra-short videos)
     const enriched: any[] = [];
-    const videosToShortsCheck: { videoId: string; channelId: string }[] = [];
 
     for (const r of rawResults) {
       if (r.type === "video") {
         const details = videoDetails[r.videoId];
         if (!details || !details.embeddable) continue; // Skip non-embeddable
 
-        // Quick filter: skip videos with #shorts in the title
+        // Skip videos with #shorts in the title
         if (r.title.toLowerCase().includes("#shorts") || r.title.toLowerCase().includes("#short")) {
           continue;
         }
 
+        const durationSeconds = parseDuration(details.duration);
+        // Skip ultra-short videos (likely Shorts or empty)
+        if (durationSeconds <= 10) continue;
+
         enriched.push({
           ...r,
           duration: details.duration,
-          durationSeconds: parseDuration(details.duration),
+          durationSeconds,
           viewCount: parseInt(details.viewCount) || 0,
         });
-
-        // Queue for UUSH playlist short-detection check
-        if (r.channelId) {
-          videosToShortsCheck.push({ videoId: r.videoId, channelId: r.channelId });
-        }
       } else if (r.type === "playlist") {
         const firstVid = playlistFirstVideo[r.playlistId];
         const plDetail = playlistDetails[r.playlistId];
@@ -194,48 +192,9 @@ serve(async (req) => {
       }
     }
 
-    // Step 5: Check for YouTube Shorts via UUSH playlist method (1 quota unit each)
-    // Construct each channel's Shorts playlist ID by replacing "UC" prefix with "UUSH"
-    const shortsSet = new Set<string>();
-
-    if (videosToShortsCheck.length > 0) {
-      const checks = videosToShortsCheck.map(async ({ videoId, channelId }) => {
-        try {
-          // Only works for channels with UC-prefixed IDs
-          if (!channelId.startsWith("UC")) return;
-
-          const shortsPlaylistId = "UUSH" + channelId.slice(2);
-          const checkUrl = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
-          checkUrl.searchParams.set("part", "id");
-          checkUrl.searchParams.set("playlistId", shortsPlaylistId);
-          checkUrl.searchParams.set("videoId", videoId);
-          checkUrl.searchParams.set("maxResults", "1");
-          checkUrl.searchParams.set("key", YOUTUBE_API_KEY);
-
-          const res = await fetch(checkUrl.toString());
-          const data = await res.json();
-
-          // If the API returns items, this video is in the Shorts playlist
-          if (data.items && data.items.length > 0) {
-            shortsSet.add(videoId);
-          }
-        } catch {
-          // If the check fails (playlist doesn't exist, etc.), assume it's not a Short
-        }
-      });
-
-      await Promise.allSettled(checks);
-    }
-
-    // Filter out detected Shorts
-    const finalResults = enriched.filter(r => {
-      if (r.type === "video" && shortsSet.has(r.videoId)) return false;
-      return true;
-    });
-
+    const finalResults = enriched;
     const videoCount = finalResults.filter(r => r.type === "video").length;
-    const shortsRemoved = shortsSet.size;
-    console.log(`Shorts detection: checked ${videosToShortsCheck.length} videos, found ${shortsRemoved} Shorts, ${videoCount} videos remain`);
+    console.log(`Filtering: ${videoCount} videos remain after title + duration filters`);
 
     // Step 6: Supplementary search if too few videos after filtering
     // Use videoDuration=medium (4-20min) which inherently excludes Shorts
