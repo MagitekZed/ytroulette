@@ -3,7 +3,7 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=6';
+import * as UI from './ui.js?v=7';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -220,6 +220,7 @@ async function handleRoomChange(payload) {
   state.swapFirstIndex = null;
 
   if (oldStatus !== state.room.status) {
+    state.isProcessing = false; // Reset tally guard on status transition
     // Re-fetch player data so scores are accurate on view transitions
     const { data: players } = await db.from('yt_players').select().eq('room_code', state.roomCode);
     if (players) state.players = players;
@@ -248,7 +249,8 @@ async function handlePlayerChange(payload) {
     if (allVoted && state.players.length > 0) {
       state.isProcessing = true;
       await tallyAndAdvance();
-      state.isProcessing = false;
+      // Don't reset isProcessing here — it resets when room status changes
+      // This prevents the score-update realtime event from triggering a second tally
     }
   }
 
