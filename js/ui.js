@@ -295,8 +295,11 @@ function renderWaitingMessage(activePlayer) {
 export function renderVoting(state) {
   const me = state.players.find(p => p.id === state.playerId);
   const hasVoted = !!me?.vote_for;
-  const orderSet = new Set(state.room?.player_order || []);
-  const voteTargets = state.players.filter(p => orderSet.has(p.id));
+  const playerOrder = state.room?.player_order || [];
+  // Stable order: use player_order so cards don't shuffle when votes come in
+  const voteTargets = playerOrder
+    .map(id => state.players.find(p => p.id === id))
+    .filter(Boolean);
   const votedCount = state.players.filter(p => p.vote_for).length;
   const totalPlayers = state.players.length;
 

@@ -963,6 +963,7 @@ function setupEventListeners() {
         if (!name || !code) { toast('Enter your name and room code!', 'error'); break; }
         btn.disabled = true;
         await joinRoom(code, name);
+        btn.disabled = false;
         break;
       }
       case 'toggle-ready': await toggleReady(); break;
