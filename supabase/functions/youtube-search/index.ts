@@ -57,9 +57,9 @@ serve(async (req) => {
     const items = searchData.items || [];
 
     // Separate videos and playlists
-    const videoIds = [];
-    const playlistIds = [];
-    const rawResults = [];
+    const videoIds: string[] = [];
+    const playlistIds: string[] = [];
+    const rawResults: any[] = [];
 
     for (const item of items) {
       if (item.id.kind === "youtube#video") {
@@ -67,6 +67,7 @@ serve(async (req) => {
         rawResults.push({
           type: "video",
           videoId: item.id.videoId,
+          channelId: item.snippet.channelId,
           title: item.snippet.title,
           thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || "",
           channelTitle: item.snippet.channelTitle,
@@ -85,10 +86,9 @@ serve(async (req) => {
       }
     }
 
-    // Step 2: Batch fetch video details — duration + embeddable status (1 quota unit)
-    const videoDetails = {};
+    // Step 2: Batch fetch video details — duration + embeddable status (1 quota unit per batch)
+    const videoDetails: Record<string, { duration: string; embeddable: boolean }> = {};
     if (videoIds.length > 0) {
-      // Process in batches of 50
       for (let i = 0; i < videoIds.length; i += 50) {
         const batch = videoIds.slice(i, i + 50);
         const detailsUrl = new URL("https://www.googleapis.com/youtube/v3/videos");
@@ -109,7 +109,7 @@ serve(async (req) => {
     }
 
     // Step 3: Fetch first video of each playlist (1 quota unit each)
-    const playlistFirstVideo = {};
+    const playlistFirstVideo: Record<string, { videoId: string; thumbnail: string; title: string }> = {};
     for (const plId of playlistIds) {
       try {
         const plUrl = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
@@ -134,19 +134,30 @@ serve(async (req) => {
       }
     }
 
-    // Step 4: Build enriched results
-    const enriched = [];
+    // Step 4: Build enriched results (filter non-embeddable + title-based #shorts)
+    const enriched: any[] = [];
+    const videosToShortsCheck: { videoId: string; channelId: string }[] = [];
+
     for (const r of rawResults) {
       if (r.type === "video") {
         const details = videoDetails[r.videoId];
         if (!details || !details.embeddable) continue; // Skip non-embeddable
-        const durationSeconds = parseDuration(details.duration);
-        if (durationSeconds <= 60) continue; // Skip YouTube Shorts
+
+        // Quick filter: skip videos with #shorts in the title
+        if (r.title.toLowerCase().includes("#shorts") || r.title.toLowerCase().includes("#short")) {
+          continue;
+        }
+
         enriched.push({
           ...r,
           duration: details.duration,
-          durationSeconds,
+          durationSeconds: parseDuration(details.duration),
         });
+
+        // Queue for UUSH playlist short-detection check
+        if (r.channelId) {
+          videosToShortsCheck.push({ videoId: r.videoId, channelId: r.channelId });
+        }
       } else if (r.type === "playlist") {
         const firstVid = playlistFirstVideo[r.playlistId];
         enriched.push({
@@ -158,7 +169,49 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ results: enriched }), {
+    // Step 5: Check for YouTube Shorts via UUSH playlist method (1 quota unit each)
+    // Construct each channel's Shorts playlist ID by replacing "UC" prefix with "UUSH"
+    const shortsSet = new Set<string>();
+
+    if (videosToShortsCheck.length > 0) {
+      const checks = videosToShortsCheck.map(async ({ videoId, channelId }) => {
+        try {
+          // Only works for channels with UC-prefixed IDs
+          if (!channelId.startsWith("UC")) return;
+
+          const shortsPlaylistId = "UUSH" + channelId.slice(2);
+          const checkUrl = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
+          checkUrl.searchParams.set("part", "id");
+          checkUrl.searchParams.set("playlistId", shortsPlaylistId);
+          checkUrl.searchParams.set("videoId", videoId);
+          checkUrl.searchParams.set("maxResults", "1");
+          checkUrl.searchParams.set("key", YOUTUBE_API_KEY);
+
+          const res = await fetch(checkUrl.toString());
+          const data = await res.json();
+
+          // If the API returns items, this video is in the Shorts playlist
+          if (data.items && data.items.length > 0) {
+            shortsSet.add(videoId);
+          }
+        } catch {
+          // If the check fails (playlist doesn't exist, etc.), assume it's not a Short
+        }
+      });
+
+      await Promise.allSettled(checks);
+    }
+
+    // Filter out detected Shorts
+    const finalResults = enriched.filter(r => {
+      if (r.type === "video" && shortsSet.has(r.videoId)) return false;
+      return true;
+    });
+
+    const shortsRemoved = shortsSet.size;
+    console.log(`Shorts detection: checked ${videosToShortsCheck.length} videos, found ${shortsRemoved} Shorts`);
+
+    return new Response(JSON.stringify({ results: finalResults }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
@@ -171,7 +224,7 @@ serve(async (req) => {
 });
 
 // Parse ISO 8601 duration (PT1H2M3S) to seconds
-function parseDuration(iso) {
+function parseDuration(iso: string): number {
   if (!iso) return 0;
   const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!match) return 0;
