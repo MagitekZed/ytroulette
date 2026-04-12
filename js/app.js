@@ -62,6 +62,21 @@ async function init() {
   } else {
     showView('home');
   }
+
+  // Poll every 2s as a reliable fallback — ensures state stays in sync
+  // even if Supabase Realtime events are missed or delayed
+  setInterval(async () => {
+    if (!state.roomCode || state.currentView === 'home') return;
+    try {
+      const oldStatus = state.room?.status;
+      await loadRoom(state.roomCode);
+      if (state.room?.status !== oldStatus) {
+        showView(viewForStatus(state.room.status));
+      } else {
+        debouncedRender();
+      }
+    } catch { /* ignore polling errors */ }
+  }, 2000);
 }
 
 // ============================================================
