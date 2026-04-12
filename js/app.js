@@ -3,7 +3,7 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=7';
+import * as UI from './ui.js?v=8';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -160,7 +160,9 @@ async function joinRoom(roomCode, playerName) {
 
   const { data: room } = await db.from('yt_rooms').select().eq('code', roomCode).single();
   if (!room) { toast('Room not found. Check the code.', 'error'); return; }
-  if (room.status !== 'lobby') { toast('Game already in progress.', 'error'); return; }
+  if (room.status === 'gameover') { toast('That game is over. Ask the host to start a new one.', 'error'); return; }
+
+  const isMidGame = room.status !== 'lobby';
 
   const { data: existing } = await db.from('yt_players').select().eq('room_code', roomCode);
   if (existing?.some(p => p.name.toLowerCase() === playerName.toLowerCase())) {
@@ -179,8 +181,8 @@ async function joinRoom(roomCode, playerName) {
 
   await loadRoom(roomCode);
   subscribeToRoom(roomCode);
-  showView('lobby');
-  toast('Joined room!', 'success');
+  showView(viewForStatus(room.status));
+  toast(isMidGame ? 'Joined mid-game! You\'ll play next round.' : 'Joined room!', 'success');
 }
 
 async function loadRoom(roomCode) {
@@ -478,16 +480,23 @@ async function nextRound() {
   const nextRnd = (state.room.round || 1) + 1;
   const term = generateSearchTerm();
 
-  // Round-robin: rotate player_order so next player starts
+  // Re-fetch current players to include mid-game joiners
+  const { data: currentPlayers } = await db.from('yt_players').select().eq('room_code', state.roomCode);
+  const currentIds = new Set((currentPlayers || []).map(p => p.id));
+
+  // Round-robin: rotate existing order, add new players, remove departed ones
   const oldOrder = state.room.player_order || [];
   const rotated = [...oldOrder.slice(1), oldOrder[0]];
+  const cleanOrder = rotated.filter(id => currentIds.has(id));
+  const newPlayers = (currentPlayers || []).filter(p => !cleanOrder.includes(p.id)).map(p => p.id);
+  const finalOrder = [...cleanOrder, ...newPlayers];
 
   await db.from('yt_players').update({ selected_video: null, vote_for: null })
     .eq('room_code', state.roomCode);
 
   await db.from('yt_rooms').update({
     status: 'playing', round: nextRnd, current_player_index: 0,
-    current_search_term: term, player_order: rotated,
+    current_search_term: term, player_order: finalOrder,
   }).eq('code', state.roomCode);
 }
 
@@ -512,6 +521,58 @@ async function leaveGame() {
     .eq('id', state.playerId).eq('room_code', state.roomCode);
   clearSession();
   showView('home');
+}
+
+async function kickPlayer(playerId) {
+  if (!isHost() || playerId === state.playerId) return;
+
+  // Delete player from DB
+  await db.from('yt_players').delete()
+    .eq('id', playerId).eq('room_code', state.roomCode);
+
+  // Handle active game: update player_order
+  if (state.room.status === 'playing' || state.room.status === 'voting') {
+    const order = state.room.player_order || [];
+    const kickedIdx = order.indexOf(playerId);
+    const newOrder = order.filter(id => id !== playerId);
+
+    if (newOrder.length < 2) {
+      // Not enough players — back to lobby
+      await db.from('yt_rooms').update({ status: 'lobby', player_order: newOrder })
+        .eq('code', state.roomCode);
+      toast('Not enough players. Returning to lobby.', 'info');
+      return;
+    }
+
+    if (state.room.status === 'playing' && kickedIdx === (state.room.current_player_index || 0)) {
+      // Kicked the active player — advance turn
+      let newIdx = state.room.current_player_index || 0;
+      if (newIdx >= newOrder.length) {
+        // Was last player in round → go to voting
+        await db.from('yt_rooms').update({ status: 'voting', player_order: newOrder })
+          .eq('code', state.roomCode);
+      } else {
+        // Next player in order
+        const term = generateSearchTerm();
+        await db.from('yt_rooms').update({
+          player_order: newOrder, current_player_index: newIdx,
+          current_search_term: term,
+        }).eq('code', state.roomCode);
+      }
+    } else if (state.room.status === 'playing' && kickedIdx >= 0) {
+      // Kicked a player before current → shift index
+      let newIdx = state.room.current_player_index || 0;
+      if (kickedIdx < newIdx) newIdx--;
+      await db.from('yt_rooms').update({ player_order: newOrder, current_player_index: newIdx })
+        .eq('code', state.roomCode);
+    } else {
+      // Voting or kicked player wasn't in order
+      await db.from('yt_rooms').update({ player_order: newOrder })
+        .eq('code', state.roomCode);
+    }
+  }
+
+  toast('Player removed.', 'info');
 }
 
 // ============================================================
@@ -610,6 +671,7 @@ function setupEventListeners() {
       case 'next-round': await nextRound(); break;
       case 'play-again': await playAgain(); break;
       case 'leave-game': await leaveGame(); break;
+      case 'kick-player': await kickPlayer(value); break;
     }
   });
 

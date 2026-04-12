@@ -438,6 +438,40 @@ input[type="text"]:focus { border-color: var(--red); }
 .ready-indicator.is-ready { color: var(--teal); }
 .ready-indicator.not-ready { color: var(--text-dim); }
 
+/* Kick button (lobby) */
+.btn-kick {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all var(--transition);
+  flex-shrink: 0;
+  line-height: 1;
+}
+.btn-kick:hover {
+  color: #ff5555;
+  background: rgba(255, 50, 50, 0.12);
+}
+
+/* Kick button (mini-score) */
+.mini-kick {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.65rem;
+  cursor: pointer;
+  padding: 0 2px;
+  margin-left: 2px;
+  transition: color var(--transition);
+  line-height: 1;
+}
+.mini-kick:hover {
+  color: #ff5555;
+}
+
 .lobby-actions {
   width: 100%;
   max-width: 400px;

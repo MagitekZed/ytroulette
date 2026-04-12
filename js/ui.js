@@ -81,6 +81,7 @@ export function renderLobby(state) {
               <span class="ready-indicator ${p.ready ? 'is-ready' : 'not-ready'}">
                 ${p.ready ? '✓ Ready' : '○ Waiting'}
               </span>
+              ${(isHost && p.id !== state.playerId) ? `<button class="btn-kick" data-action="kick-player" data-value="${p.id}" title="Remove player">✕</button>` : ''}
             </div>
           `).join('')}
         </div>
@@ -115,13 +116,18 @@ export function renderGame(state) {
 
   const winScore = state.room?.win_score || 3;
 
+  const isHost = state.room?.host_id === state.playerId;
+
   const header = `
     <div class="game-header">
       <div class="game-round">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns} · FIRST TO ${winScore}</div>
       <div class="game-turn-info">${isMyTurn ? 'Your Turn!' : `${esc(activePlayer?.name || '???')}'s Turn`}</div>
       <div class="mini-scores">
         ${getSortedPlayers(state).map(p => `
-          <span class="mini-score ${p.id === activePlayerId ? 'active-player' : ''}">${esc(p.name)}: ${p.score || 0} pts</span>
+          <span class="mini-score ${p.id === activePlayerId ? 'active-player' : ''}">
+            ${esc(p.name)}: ${p.score || 0} pts
+            ${(isHost && p.id !== state.playerId) ? `<button class="mini-kick" data-action="kick-player" data-value="${p.id}" title="Remove">✕</button>` : ''}
+          </span>
         `).join('')}
       </div>
     </div>`;
@@ -252,25 +258,30 @@ export function renderVoting(state) {
         <div class="vote-progress">${votedCount}/${totalPlayers} votes in</div>
       </div>
       <div class="scrollable-content">
-        ${state.players.map(p => {
-          const isSelf = p.id === state.playerId;
-          const votedFor = me?.vote_for === p.id;
-          return `
-            <div class="vote-card ${votedFor ? 'voted-for' : ''}">
-              <div class="vote-card-player">
-                <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:36px;height:36px;font-size:0.85rem">
-                  ${p.name[0].toUpperCase()}
+        ${(() => {
+          // Only players in this round's player_order are vote targets
+          const orderSet = new Set(state.room?.player_order || []);
+          const voteTargets = state.players.filter(p => orderSet.has(p.id));
+          return voteTargets.map(p => {
+            const isSelf = p.id === state.playerId;
+            const votedFor = me?.vote_for === p.id;
+            return `
+              <div class="vote-card ${votedFor ? 'voted-for' : ''}">
+                <div class="vote-card-player">
+                  <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:36px;height:36px;font-size:0.85rem">
+                    ${p.name[0].toUpperCase()}
+                  </div>
+                  <span class="vote-card-name">${esc(p.name)}${isSelf ? ' (you)' : ''}</span>
                 </div>
-                <span class="vote-card-name">${esc(p.name)}${isSelf ? ' (you)' : ''}</span>
-              </div>
-              ${hasVoted
-                ? (votedFor
-                  ? '<div style="color:var(--teal);font-weight:600;font-size:0.85rem">✓ Your Vote</div>'
-                  : '')
-                : `<button class="btn btn-sm btn-primary btn-full" data-action="cast-vote" data-value="${p.id}">Vote</button>`
-              }
-            </div>`;
-        }).join('')}
+                ${hasVoted
+                  ? (votedFor
+                    ? '<div style="color:var(--teal);font-weight:600;font-size:0.85rem">✓ Your Vote</div>'
+                    : '')
+                  : `<button class="btn btn-sm btn-primary btn-full" data-action="cast-vote" data-value="${p.id}">Vote</button>`
+                }
+              </div>`;
+          }).join('');
+        })()}
         ${hasVoted ? '<p class="waiting-text">Waiting for other players to vote...</p>' : ''}
       </div>
       <button class="btn btn-text" data-action="leave-game">Leave Game</button>
