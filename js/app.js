@@ -325,22 +325,25 @@ async function handlePlayerChange(payload) {
 function handleHubPlaybackChange() {
   if (!state.isHub) return;
 
+  // Always render first so the DOM (#yt-player div) is updated
+  debouncedRender();
+
   if (state.room.playback_status === 'playing') {
-    // Find the selected video and play it
-    const results = state.room.search_results || [];
-    const idx = state.room.selected_video_index;
-    const video = results[idx];
-    if (video) {
-      const videoId = video.type === 'playlist' ? video.firstVideoId : video.videoId;
-      if (videoId) {
-        Hub.playVideo(videoId);
+    // Small delay to let the render + MutationObserver create the player
+    setTimeout(() => {
+      const results = state.room.search_results || [];
+      const idx = state.room.selected_video_index;
+      const video = results[idx];
+      if (video) {
+        const videoId = video.type === 'playlist' ? video.firstVideoId : video.videoId;
+        if (videoId) {
+          Hub.playVideo(videoId); // Will queue if player not ready yet
+        }
       }
-    }
+    }, 200);
   } else if (state.room.playback_status === 'stopped') {
     Hub.stopVideo();
   }
-
-  debouncedRender();
 }
 
 // ============================================================
