@@ -449,17 +449,22 @@ async function tallyAndAdvance() {
   if (winnerId) {
     const winner = state.players.find(p => p.id === winnerId);
     if (winner) {
-      await db.from('yt_players').update({ score: winner.score + 1 })
+      const newScore = (winner.score || 0) + 1;
+      await db.from('yt_players').update({ score: newScore })
         .eq('id', winnerId).eq('room_code', state.roomCode);
     }
   }
+
+  // Brief pause to let the score write propagate before we set room status
+  // (prevents clients from re-fetching stale scores)
+  await new Promise(r => setTimeout(r, 300));
 
   // Re-fetch updated scores
   const { data: updated } = await db.from('yt_players').select().eq('room_code', state.roomCode);
   state.players = updated || [];
 
   const winScore = state.room.win_score || DEFAULT_WIN_SCORE;
-  const gameWinner = state.players.find(p => p.score >= winScore);
+  const gameWinner = state.players.find(p => (p.score || 0) >= winScore);
   await db.from('yt_rooms').update({ status: gameWinner ? 'gameover' : 'results' })
     .eq('code', state.roomCode);
 }

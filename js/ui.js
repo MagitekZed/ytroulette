@@ -121,7 +121,7 @@ export function renderGame(state) {
       <div class="game-turn-info">${isMyTurn ? 'Your Turn!' : `${esc(activePlayer?.name || '???')}'s Turn`}</div>
       <div class="mini-scores">
         ${getSortedPlayers(state).map(p => `
-          <span class="mini-score ${p.id === activePlayerId ? 'active-player' : ''}">${esc(p.name)}: ${p.score}</span>
+          <span class="mini-score ${p.id === activePlayerId ? 'active-player' : ''}">${esc(p.name)}: ${p.score || 0} pts</span>
         `).join('')}
       </div>
     </div>`;
@@ -321,7 +321,7 @@ export function renderResults(state) {
               <span class="score-rank">${getRankEmoji(i)}</span>
               <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:32px;height:32px;font-size:0.8rem">${p.name[0].toUpperCase()}</div>
               <span class="score-name">${esc(p.name)}</span>
-              <span class="score-points">${p.score}</span>
+              <span class="score-points">${p.score || 0} pts</span>
             </div>
           `).join('')}
         </div>
@@ -357,7 +357,7 @@ export function renderGameOver(state) {
             <span class="score-rank">${getRankEmoji(i)}</span>
             <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:32px;height:32px;font-size:0.8rem">${p.name[0].toUpperCase()}</div>
             <span class="score-name">${esc(p.name)}</span>
-            <span class="score-points">${p.score}</span>
+            <span class="score-points">${p.score || 0} pts</span>
           </div>
         `).join('')}
       </div>
