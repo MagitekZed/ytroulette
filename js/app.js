@@ -13,7 +13,9 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ============================================================
 // CONSTANTS
 // ============================================================
-const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const ROOM_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const SPECIALS = '1234567890&#()@!?:._"-\',';  // 22 special characters
 const WIN_SCORE = 3;
 const TERM_LENGTH = 4;
 
@@ -106,7 +108,7 @@ async function attemptRejoin(roomCode) {
 // ============================================================
 function generateRoomCode() {
   let code = '';
-  for (let i = 0; i < 4; i++) code += CHARS[Math.floor(Math.random() * CHARS.length)];
+  for (let i = 0; i < 4; i++) code += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
   return code;
 }
 
@@ -283,12 +285,17 @@ function getMe() { return state.players.find(p => p.id === state.playerId); }
 
 function generateSearchTerm() {
   let t = '';
-  for (let i = 0; i < TERM_LENGTH; i++) t += CHARS[Math.floor(Math.random() * CHARS.length)];
+  for (let i = 0; i < TERM_LENGTH; i++) t += randomChar();
   return t;
 }
 
+// 26/27 chance of a letter, 1/27 chance of a special character
 function randomChar() {
-  return CHARS[Math.floor(Math.random() * CHARS.length)];
+  const roll = Math.floor(Math.random() * 27);
+  if (roll < 26) {
+    return LETTERS[roll];
+  }
+  return SPECIALS[Math.floor(Math.random() * SPECIALS.length)];
 }
 
 function shuffle(arr) {
@@ -434,12 +441,16 @@ async function nextRound() {
   const nextRnd = (state.room.round || 1) + 1;
   const term = generateSearchTerm();
 
+  // Round-robin: rotate player_order so next player starts
+  const oldOrder = state.room.player_order || [];
+  const rotated = [...oldOrder.slice(1), oldOrder[0]];
+
   await db.from('yt_players').update({ selected_video: null, vote_for: null })
     .eq('room_code', state.roomCode);
 
   await db.from('yt_rooms').update({
     status: 'playing', round: nextRnd, current_player_index: 0,
-    current_search_term: term,
+    current_search_term: term, player_order: rotated,
   }).eq('code', state.roomCode);
 }
 

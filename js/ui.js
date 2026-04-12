@@ -135,10 +135,12 @@ export function renderGame(state) {
       ${(isMyTurn && state.replaceMode) ? '<div class="replace-hint">Tap a character to replace it</div>' : ''}
     </div>`;
 
+  const leaveBtn = '<button class="btn btn-text" data-action="leave-game" style="margin-top:16px">Leave Game</button>';
+
   if (isMyTurn) {
-    return `<div class="game-view anim-fade-in">${header}${termSection}${renderMyControls(state)}</div>`;
+    return `<div class="game-view anim-fade-in">${header}${termSection}${renderMyControls(state)}${leaveBtn}</div>`;
   } else {
-    return `<div class="game-view anim-fade-in">${header}${termSection}${renderWaitingMessage(activePlayer)}</div>`;
+    return `<div class="game-view anim-fade-in">${header}${termSection}${renderWaitingMessage(activePlayer)}${leaveBtn}</div>`;
   }
 }
 
@@ -240,6 +242,7 @@ export function renderVoting(state) {
           </div>`;
       }).join('')}
       ${hasVoted ? '<p class="waiting-text">Waiting for other players to vote...</p>' : ''}
+      <button class="btn btn-text" data-action="leave-game" style="margin-top:8px">Leave Game</button>
     </div>`;
 }
 
@@ -296,6 +299,7 @@ export function renderResults(state) {
           Next Round →
         </button>
       ` : '<p class="waiting-text">Host is starting the next round...</p>'}
+      <button class="btn btn-text" data-action="leave-game" style="margin-top:8px">Leave Game</button>
     </div>`;
 }
 
