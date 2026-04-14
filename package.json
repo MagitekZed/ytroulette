@@ -1,8 +1,8 @@
 {
-  "name": "youtoube-roulette",
+  "name": "youtube-roulette",
   "version": "1.0.0",
   "description": "A multiplayer party game where players take turns searching YouTube with random search terms, select the weirdest videos, and vote on their favorites. Built as a static single-page app — works on phones via room codes, Jackbox-style.",
-  "main": "index.js",
+  "main": "index.html",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

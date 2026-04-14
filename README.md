@@ -44,7 +44,7 @@ Then open `http://localhost:3000` on your phone and desktop!
 - Each player has **3 superpowers** (once per game each):
   - 🎲 **Reroll** — generate a completely new search term
   - 🔄 **Replace** — tap a character to replace it with a new random one
-  - ↔️ **Swap** — trade your term for one from a previous turn
+  - ↔️ **Swap** — swap two characters in your search term
 
 ### Voting & Scoring
 - After all players have chosen, everyone **votes** on their favorite video

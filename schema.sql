@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS yt_rooms (
   past_terms TEXT[] DEFAULT ARRAY[]::TEXT[],
   search_results JSONB DEFAULT '[]'::JSONB,
   selected_video_index INTEGER,
+  selected_video_id TEXT,
   playback_status TEXT DEFAULT 'idle',
   videos JSONB DEFAULT '[]'::JSONB,
   created_at TIMESTAMPTZ DEFAULT now()

@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=10';
-import * as Hub from './hub.js?v=10';
+import * as UI from './ui.js?v=11';
+import * as Hub from './hub.js?v=11';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -16,7 +16,7 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ============================================================
 const ROOM_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-const SPECIALS = '1234567890&#()@!?:._"\-\',';  // 22 special characters
+const SPECIALS = `1234567890&#()@!?:._"'-,`;  // 23 special characters for search terms
 const DEFAULT_WIN_SCORE = 3;
 const TERM_LENGTH = 4;
 
@@ -93,15 +93,7 @@ async function init() {
       } else {
         debouncedRender();
       }
-
-      // Hub auto-start: when all players are ready
-      if (state.isHub && state.room?.status === 'lobby' && state.players.length >= 2) {
-        const allReady = state.players.every(p => p.ready);
-        if (allReady && !state.isProcessing) {
-          state.isProcessing = true;
-          await startGame();
-        }
-      }
+      // Note: hub auto-start is handled only in handlePlayerChange to prevent race conditions
     } catch { /* ignore */ }
   }, 2000);
 }
@@ -174,14 +166,29 @@ async function attemptHubRejoin(roomCode) {
 // ============================================================
 // ROOM MANAGEMENT
 // ============================================================
-function generateRoomCode() {
-  let code = '';
-  for (let i = 0; i < 4; i++) code += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
-  return code;
+async function generateRoomCode() {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let code = '';
+    for (let i = 0; i < 4; i++) code += ROOM_CHARS[Math.floor(Math.random() * ROOM_CHARS.length)];
+    const { data } = await db.from('yt_rooms').select('code').eq('code', code).maybeSingle();
+    if (!data) return code;
+  }
+  return null;
+}
+
+// Lazy cleanup: remove rooms older than 24 hours on room creation
+async function cleanupStaleRooms() {
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await db.from('yt_rooms').delete().lt('created_at', cutoff);
+  } catch { /* best-effort cleanup */ }
 }
 
 async function createRoom(playerName, winScore) {
-  const code = generateRoomCode();
+  await cleanupStaleRooms();
+  const code = await generateRoomCode();
+  if (!code) { toast('Unable to generate a unique room code. Try again.', 'error'); return; }
+
   const { error: roomErr } = await db.from('yt_rooms').insert({
     code, host_id: state.playerId, status: 'lobby', win_score: winScore, is_hub: false,
   });
@@ -203,7 +210,10 @@ async function createRoom(playerName, winScore) {
 }
 
 async function createHubRoom(winScore) {
-  const code = generateRoomCode();
+  await cleanupStaleRooms();
+  const code = await generateRoomCode();
+  if (!code) { toast('Unable to generate a unique room code. Try again.', 'error'); return; }
+
   const { error } = await db.from('yt_rooms').insert({
     code, host_id: state.playerId, status: 'lobby', win_score: winScore, is_hub: true,
   });
@@ -294,10 +304,14 @@ async function handleRoomChange(payload) {
   const oldTerm = state.room?.current_search_term;
   state.room = payload.new;
 
-  state.replaceMode = false;
-  state.replaceCharIndex = null;
-  state.swapMode = false;
-  state.swapFirstIndex = null;
+  // Only reset superpower interaction state when the term or game status changes,
+  // so unrelated room updates don't interrupt mid-superpower interaction
+  if (oldStatus !== state.room.status || oldTerm !== state.room.current_search_term) {
+    state.replaceMode = false;
+    state.replaceCharIndex = null;
+    state.swapMode = false;
+    state.swapFirstIndex = null;
+  }
 
   if (oldStatus !== state.room.status) {
     state.isProcessing = false;
@@ -574,7 +588,8 @@ function shuffle(arr) {
 // ============================================================
 
 async function startGame() {
-  if (!isHost()) return;
+  if (!isHost() || state.isProcessing) return;
+  state.isProcessing = true;
   const order = shuffle(state.players.map(p => p.id));
   const term = generateSearchTerm();
 

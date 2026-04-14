@@ -1555,7 +1555,7 @@ input[type="text"]:focus { border-color: var(--red); }
   animation: fadeIn 0.2s ease;
 }
 .overlay-dialog {
-  background: var(--bg);
+  background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 32px;
