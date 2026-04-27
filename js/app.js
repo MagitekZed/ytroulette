@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=37';
-import * as Hub from './hub.js?v=37';
+import * as UI from './ui.js?v=38';
+import * as Hub from './hub.js?v=38';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -62,6 +62,7 @@ const state = {
   _resultsAnimated: false,
   _showingTurnBanner: false,
   _turnBannerTimeout: null,
+  _autoAdvanceTimer: null,
   _connStatus: 'ok',
 };
 
@@ -481,6 +482,8 @@ function clearSession() {
   state._resultsAnimated = false;
   state._showingTurnBanner = false;
   if (state._turnBannerTimeout) { clearTimeout(state._turnBannerTimeout); state._turnBannerTimeout = null; }
+  if (state._autoAdvanceTimer) { clearInterval(state._autoAdvanceTimer); state._autoAdvanceTimer = null; }
+  if (state._avatarWriteTimer) { clearTimeout(state._avatarWriteTimer); state._avatarWriteTimer = null; }
   state._connStatus = 'ok';
   const pillHost = document.getElementById('conn-pill-host');
   if (pillHost) pillHost.innerHTML = '';
@@ -503,6 +506,9 @@ async function attemptRejoin(roomCode) {
     state.roomCode = roomCode;
     state.room = room;
     const { data: players } = await db.from('yt_players').select().eq('room_code', roomCode);
+    // Pattern 5: if the user bailed (cleared session) while we were loading
+    // the player list, don't re-populate.
+    if (state.roomCode !== roomCode) return false;
     state.players = players || [];
     subscribeToRoom(roomCode);
     showView(viewForStatus(room.status));
@@ -518,6 +524,8 @@ async function attemptHubRejoin(roomCode) {
     state.room = room;
     state.isHub = true;
     const { data: players } = await db.from('yt_players').select().eq('room_code', roomCode);
+    // Pattern 5: bail if the user cleared session mid-rejoin.
+    if (state.roomCode !== roomCode) return false;
     state.players = players || [];
 
     // Re-initialize YouTube player for hub
@@ -650,8 +658,15 @@ async function joinRoom(roomCode, playerName) {
 }
 
 async function loadRoom(roomCode) {
-  const { data: room } = await db.from('yt_rooms').select().eq('code', roomCode).single();
-  const { data: players } = await db.from('yt_players').select().eq('room_code', roomCode);
+  // Pattern 5: capture the requested code and re-validate after the awaits.
+  // If the user left the room (clearSession nulled state.roomCode) or joined a
+  // different room while these queries were in flight, don't repopulate state
+  // with data from the old room.
+  const code = roomCode;
+  const { data: room } = await db.from('yt_rooms').select().eq('code', code).single();
+  if (state.roomCode !== code) return;
+  const { data: players } = await db.from('yt_players').select().eq('room_code', code);
+  if (state.roomCode !== code) return;
   state.room = room;
   state.players = players || [];
 }
@@ -676,6 +691,9 @@ async function forceReconcile() {
   setConnStatus('reconnecting');
   try {
     await loadRoom(state.roomCode);
+    // Pattern 5: re-check after every await — user may have left the room
+    // while loadRoom was in flight (visibilitychange + leave intersect).
+    if (!state.roomCode) return;
     if (state.room) {
       const targetView = viewForStatus(state.room.status);
       if (state.currentView !== targetView) {
@@ -690,6 +708,7 @@ async function forceReconcile() {
       showView('home');
       return;
     }
+    if (!state.roomCode) return;
     if (!state.channel) subscribeToRoom(state.roomCode);
     setConnStatus('ok');
   } catch (err) {
@@ -757,20 +776,32 @@ async function handleRoomChange(payload) {
     const newResultsLen = state.room.search_results?.length || 0;
     if (oldResultsLen === 0 && newResultsLen > 0) {
       state._justLoadedCells = true;
-      setTimeout(() => { state._justLoadedCells = false; debouncedRender(); }, 250);
+      setTimeout(() => {
+        if (!state.roomCode) return;
+        state._justLoadedCells = false;
+        debouncedRender();
+      }, 250);
     }
     // H1 — turn becomes mine (turns 2+; turn 1 covered by showView hook)
     if (oldPlayerIndex !== undefined && state.room.current_player_index !== oldPlayerIndex) {
       const myIndex = state.room.player_order?.indexOf(state.playerId);
       if (myIndex >= 0 && state.room.current_player_index === myIndex) {
         state._turnJustStartedForMe = true;
-        setTimeout(() => { state._turnJustStartedForMe = false; debouncedRender(); }, 1400);
+        setTimeout(() => {
+          if (!state.roomCode) return;
+          state._turnJustStartedForMe = false;
+          debouncedRender();
+        }, 1400);
       }
     }
     // H2 — search term changed: replay slot-cell reveal
     if (oldTerm !== state.room.current_search_term && state.room.current_search_term) {
       state._termJustRevealed = true;
-      setTimeout(() => { state._termJustRevealed = false; debouncedRender(); }, 500);
+      setTimeout(() => {
+        if (!state.roomCode) return;
+        state._termJustRevealed = false;
+        debouncedRender();
+      }, 500);
     }
   }
 
@@ -823,6 +854,7 @@ async function handlePlayerChange(payload) {
     if (payload.new.id !== state.playerId) {
       state._justJoinedIds.add(payload.new.id);
       setTimeout(() => {
+        if (!state.roomCode) return;
         state._justJoinedIds.delete(payload.new.id);
         debouncedRender();
       }, 600);
@@ -838,6 +870,7 @@ async function handlePlayerChange(payload) {
     if (!wasReady && payload.new.ready === true && payload.new.id !== state.playerId) {
       state._justReadiedIds.add(payload.new.id);
       setTimeout(() => {
+        if (!state.roomCode) return;
         state._justReadiedIds.delete(payload.new.id);
         debouncedRender();
       }, 600);
@@ -890,6 +923,8 @@ function handleHubPlaybackChange() {
 
   if (state.room.playback_status === 'playing') {
     setTimeout(async () => {
+      // Pattern 4: bail if the user left the room while we were waiting.
+      if (!state.roomCode) return;
       // Use the video ID stored directly on the room — no stale index lookup
       const videoId = state.room.selected_video_id;
 
@@ -1029,13 +1064,20 @@ function showView(name) {
     const myIndex = state.room.player_order?.indexOf(state.playerId);
     if (myIndex >= 0 && state.room.current_player_index === myIndex && !state._turnJustStartedForMe) {
       state._turnJustStartedForMe = true;
-      setTimeout(() => { state._turnJustStartedForMe = false; debouncedRender(); }, 1400);
+      setTimeout(() => {
+        if (!state.roomCode) return;
+        state._turnJustStartedForMe = false;
+        debouncedRender();
+      }, 1400);
     }
   }
 
   // N3 — results-announcement bloom: run-once per results-view mount.
   if (name === 'results' && !state._resultsAnimated) {
-    setTimeout(() => { state._resultsAnimated = true; }, 1400);
+    setTimeout(() => {
+      if (!state.roomCode) return;
+      state._resultsAnimated = true;
+    }, 1400);
   }
   // Reset for the next results view when leaving (lobby or new round).
   if (name === 'lobby' || name === 'game') {
@@ -1052,6 +1094,8 @@ function showView(name) {
   if (state.isHub && name === 'results') {
     let countdown = 30;
     state._autoAdvanceTimer = setInterval(async () => {
+      // Pattern 4: guard against state mutation after the user has left the room.
+      if (!state.roomCode) return;
       countdown--;
       const el = document.getElementById('hub-countdown');
       if (el) el.textContent = countdown;
@@ -1239,9 +1283,20 @@ async function toggleReady() {
 
 // --- Superpowers ---
 
+// Pattern 2: superpower one-shot user actions — consume optimistically before
+// the DB writes (matches the cycle-avatar pattern). A fast double-tap of the
+// same superpower button then trips the has_* check at the UI layer because
+// me.has_reroll/replace/swap is already false locally.
+
 async function useReroll() {
   const me = getMe();
   if (!me?.has_reroll) return;
+  // Optimistic local consumption — gates a second tap before the player echo
+  // returns. The DB write below is the source of truth; the realtime echo will
+  // reconcile (no-op since local already matches).
+  me.has_reroll = false;
+  render();
+
   const oldTerm = state.room.current_search_term;
   const newTerm = generateSearchTerm();
 
@@ -1258,12 +1313,16 @@ async function useReroll() {
 async function useReplace(charIndex, chosenChar) {
   const me = getMe();
   if (!me?.has_replace) return;
+  // Optimistic local consumption.
+  me.has_replace = false;
+
   const chars = state.room.current_search_term.split('');
   chars[charIndex] = chosenChar.toUpperCase();
   const newTerm = chars.join('');
 
   state.replaceMode = false;
   state.replaceCharIndex = null;
+  render();
 
   await db.from('yt_rooms').update({
     current_search_term: newTerm,
@@ -1277,9 +1336,16 @@ async function useReplace(charIndex, chosenChar) {
 async function useSwap(idx1, idx2) {
   const me = getMe();
   if (!me?.has_swap) return;
+  // Optimistic local consumption.
+  me.has_swap = false;
+
   const chars = state.room.current_search_term.split('');
   [chars[idx1], chars[idx2]] = [chars[idx2], chars[idx1]];
   const newTerm = chars.join('');
+
+  state.swapMode = false;
+  state.swapFirstIndex = null;
+  render();
 
   await db.from('yt_rooms').update({
     current_search_term: newTerm,
@@ -1288,15 +1354,17 @@ async function useSwap(idx1, idx2) {
 
   await db.from('yt_players').update({ has_swap: false })
     .eq('id', state.playerId).eq('room_code', state.roomCode);
-
-  state.swapMode = false;
-  state.swapFirstIndex = null;
 }
 
 // --- Video Selection (Hub mode) ---
 
 async function selectVideo(index) {
-  // Store picked video info on the player's row
+  // Pattern 1: write the room FIRST, then the player. The Hub's
+  // handleHubPlaybackChange fires on the room echo (playback_status='playing')
+  // and swings the YT player in. The player's picked_video_* echoes arrive
+  // after — voting view reads them later. If we wrote the player first, the
+  // Hub would re-render the selecting view with the picked tile highlighted
+  // before playback started.
   const results = state.room.search_results || [];
   const video = results[index];
   if (!video) {
@@ -1309,30 +1377,36 @@ async function selectVideo(index) {
 
   const videoId = video.type === 'playlist' ? video.firstVideoId : video.videoId;
 
-  await db.from('yt_players').update({
+  // Write A: room (drives the playback transition).
+  const { error: roomErr } = await db.from('yt_rooms').update({
+    selected_video_index: index,
+    selected_video_id: videoId,
+    playback_status: 'playing',
+  }).eq('code', state.roomCode);
+  if (roomErr) {
+    console.error('selectVideo room update failed:', roomErr);
+    toast('Failed to start playback. Try again.', 'error');
+    return;
+  }
+
+  // Write B: player (records who picked what — for voting view).
+  const { error: playerErr } = await db.from('yt_players').update({
     picked_video_id: videoId,
     picked_video_title: video.title,
     picked_video_thumbnail: video.type === 'playlist' ? video.firstVideoThumbnail : video.thumbnail,
   }).eq('id', state.playerId).eq('room_code', state.roomCode);
 
-  // Store video ID directly on room — avoids stale index lookups
-  try {
-    const { error } = await db.from('yt_rooms').update({
-      selected_video_index: index,
-      selected_video_id: videoId,
-      playback_status: 'playing',
-    }).eq('code', state.roomCode);
-    if (error) throw error;
-  } catch (err) {
-    console.error('selectVideo room update failed:', err);
-    toast('Failed to start playback. Try again.', 'error');
-    // Roll back the player's picked_video_* fields so the pick can be retried
+  if (playerErr) {
+    console.error('selectVideo player update failed:', playerErr);
+    toast('Failed to record pick. Reverting...', 'error');
+    // Roll back the room write — playback transition has to be undone since
+    // the pick wasn't recorded.
     try {
-      await db.from('yt_players').update({
-        picked_video_id: null,
-        picked_video_title: null,
-        picked_video_thumbnail: null,
-      }).eq('id', state.playerId).eq('room_code', state.roomCode);
+      await db.from('yt_rooms').update({
+        selected_video_index: null,
+        selected_video_id: null,
+        playback_status: 'selecting',
+      }).eq('code', state.roomCode);
     } catch (rollbackErr) {
       console.error('selectVideo rollback failed:', rollbackErr);
     }
@@ -1395,11 +1469,15 @@ async function tallyAndAdvance() {
   // Call #2 would re-enter, re-tally the same round, and double the score.
   // Round number alone disambiguates: nextRound increments it, so a stale token
   // from a prior round naturally fails the equality check.
+  // Pattern 5: capture roomCode at entry; re-check after each await so we don't
+  // mutate state belonging to an old room if the user left mid-tally.
+  const code = state.roomCode;
   const round = state.room?.round;
   if (state.isProcessing || (round != null && state._lastTalliedRound === round)) return;
   state.isProcessing = true;
   try {
-    const { data: freshPlayers } = await db.from('yt_players').select().eq('room_code', state.roomCode);
+    const { data: freshPlayers } = await db.from('yt_players').select().eq('room_code', code);
+    if (state.roomCode !== code) return;
     state.players = freshPlayers || [];
 
     const { winnerId, isUnanimous } = UI.tallyVotes(state);
@@ -1410,7 +1488,8 @@ async function tallyAndAdvance() {
         const points = (isUnanimous && state.players.length >= 3) ? 2 : 1;
         const newScore = (winner.score || 0) + points;
         await db.from('yt_players').update({ score: newScore })
-          .eq('id', winnerId).eq('room_code', state.roomCode);
+          .eq('id', winnerId).eq('room_code', code);
+        if (state.roomCode !== code) return;
       }
     }
 
@@ -1428,10 +1507,18 @@ async function tallyAndAdvance() {
     state.revealingVotes = true;
     render();
     await new Promise(r => setTimeout(r, 1500));
+    if (state.roomCode !== code) return;
 
     await new Promise(r => setTimeout(r, 300));
+    if (state.roomCode !== code) return;
 
-    const { data: updated } = await db.from('yt_players').select().eq('room_code', state.roomCode);
+    // Pattern 6: clear render-only flag in its tight scope, BEFORE the room
+    // status write — so a slow room-status echo can't mount the results view
+    // while revealingVotes is still true (which would flash vote-reveal styling).
+    state.revealingVotes = false;
+
+    const { data: updated } = await db.from('yt_players').select().eq('room_code', code);
+    if (state.roomCode !== code) return;
     state.players = updated || [];
 
     const winScore = state.room.win_score || DEFAULT_WIN_SCORE;
@@ -1440,7 +1527,7 @@ async function tallyAndAdvance() {
       status: gameWinner ? 'gameover' : 'results',
       last_round_winner: winnerId || lastWinner,
       streak_count: newStreak,
-    }).eq('code', state.roomCode);
+    }).eq('code', code);
   } finally {
     state.isProcessing = false;
     state.revealingVotes = false;
@@ -1453,6 +1540,10 @@ async function nextRound() {
   if (!isHost() || state.isProcessing) return;
   state.isProcessing = true;
   try {
+    // Pattern 1: write the room FIRST (status flip + new term), THEN bulk-reset
+    // the players. The Hub transitions on the room echo; subsequent player-reset
+    // echoes arrive while the game view is already mounted — no flash of the
+    // voting/results view with empty player thumbnails.
     const nextRnd = (state.room.round || 1) + 1;
     const term = generateSearchTerm();
 
@@ -1465,16 +1556,16 @@ async function nextRound() {
     const newPlayers = (currentPlayers || []).filter(p => !cleanOrder.includes(p.id)).map(p => p.id);
     const finalOrder = [...cleanOrder, ...newPlayers];
 
-    await db.from('yt_players').update({
-      selected_video: null, vote_for: null,
-      picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
-    }).eq('room_code', state.roomCode);
-
     await db.from('yt_rooms').update({
       status: 'playing', round: nextRnd, current_player_index: 0,
       current_search_term: term, player_order: finalOrder,
       search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
     }).eq('code', state.roomCode);
+
+    await db.from('yt_players').update({
+      selected_video: null, vote_for: null,
+      picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
+    }).eq('room_code', state.roomCode);
   } finally {
     state.isProcessing = false;
   }
@@ -1482,14 +1573,11 @@ async function nextRound() {
 
 async function playAgain() {
   if (!isHost()) return;
+  // Pattern 1: write the room FIRST, then the players. Same reasoning as
+  // nextRound — the Hub transitions on the room echo without seeing a
+  // voting/results view with reset player thumbnails.
   const order = shuffle(state.players.map(p => p.id));
   const term = generateSearchTerm();
-
-  await db.from('yt_players').update({
-    score: 0, has_reroll: true, has_replace: true, has_swap: true,
-    selected_video: null, vote_for: null, ready: false,
-    picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
-  }).eq('room_code', state.roomCode);
 
   await db.from('yt_rooms').update({
     status: state.isHub ? 'lobby' : 'playing', round: 1, current_player_index: 0,
@@ -1497,6 +1585,12 @@ async function playAgain() {
     search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
     last_round_winner: null, streak_count: 0,
   }).eq('code', state.roomCode);
+
+  await db.from('yt_players').update({
+    score: 0, has_reroll: true, has_replace: true, has_swap: true,
+    selected_video: null, vote_for: null, ready: false,
+    picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
+  }).eq('room_code', state.roomCode);
 }
 
 async function leaveGame() {
@@ -1531,9 +1625,12 @@ function dismissEnded() {
 
 async function kickPlayer(playerId) {
   if (!isHost() || playerId === state.playerId) return;
-  await db.from('yt_players').delete()
-    .eq('id', playerId).eq('room_code', state.roomCode);
 
+  // Pattern 1: write the room FIRST (player_order with the kicked id removed),
+  // THEN delete the player row. If the player DELETE echo arrived before the
+  // room.player_order echo, the auto-tally check would compute votes over a
+  // mismatched roster (state.room.player_order still includes the kicked id,
+  // but state.players already excludes them).
   if (state.room.status === 'playing' || state.room.status === 'voting') {
     const order = state.room.player_order || [];
     const kickedIdx = order.indexOf(playerId);
@@ -1542,6 +1639,8 @@ async function kickPlayer(playerId) {
     if (newOrder.length < 2) {
       await db.from('yt_rooms').update({ status: 'lobby', player_order: newOrder })
         .eq('code', state.roomCode);
+      await db.from('yt_players').delete()
+        .eq('id', playerId).eq('room_code', state.roomCode);
       toast('Not enough players. Returning to lobby.', 'info');
       return;
     }
@@ -1568,6 +1667,14 @@ async function kickPlayer(playerId) {
       await db.from('yt_rooms').update({ player_order: newOrder })
         .eq('code', state.roomCode);
     }
+
+    await db.from('yt_players').delete()
+      .eq('id', playerId).eq('room_code', state.roomCode);
+  } else {
+    // Lobby/results/gameover — no player_order to keep consistent with the
+    // roster. Just delete the row.
+    await db.from('yt_players').delete()
+      .eq('id', playerId).eq('room_code', state.roomCode);
   }
   toast('Player removed.', 'info');
 }
@@ -1700,6 +1807,7 @@ function setupEventListeners() {
         render();
         clearTimeout(state._avatarWriteTimer);
         state._avatarWriteTimer = setTimeout(async () => {
+          if (!state.roomCode) return;
           await db.from('yt_players').update({ avatar: nextAvatar })
             .eq('id', state.playerId).eq('room_code', state.roomCode);
         }, 300);
