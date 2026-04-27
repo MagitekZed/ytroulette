@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=20';
-import * as Hub from './hub.js?v=20';
+import * as UI from './ui.js?v=21';
+import * as Hub from './hub.js?v=21';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -53,6 +53,17 @@ export { state, db };
 // ============================================================
 // SLOT-MACHINE TERM REVEAL (Hub searching state)
 // ============================================================
+// Pacing: each cell spins for ~600ms before locking, with a 400ms stagger
+// between locks. Total reveal: 4 cells × 400ms stagger + 600ms spin = ~1800ms.
+// triggerSearch enforces SLOT_REVEAL_MIN_MS so the grid never appears
+// mid-reveal even if the search returns instantly.
+const SLOT_TICK_MS = 80;
+const SLOT_FIRST_LOCK_MS = 600;
+const SLOT_STAGGER_MS = 400;
+const SLOT_HOLD_AFTER_LOCK_MS = 1000;
+// 4 chars: last lock at 600 + 3*400 = 1800ms, plus 1000ms hold = 2800ms total
+const SLOT_REVEAL_MIN_MS = SLOT_FIRST_LOCK_MS + (TERM_LENGTH - 1) * SLOT_STAGGER_MS + SLOT_HOLD_AFTER_LOCK_MS;
+
 const slotIntervals = [];
 
 function startSlotReveal() {
@@ -60,7 +71,7 @@ function startSlotReveal() {
   const cells = document.querySelectorAll('.hub-char--rolling');
   cells.forEach((cell, i) => {
     const finalChar = cell.dataset.finalChar;
-    const lockAt = 400 + i * 200;
+    const lockAt = SLOT_FIRST_LOCK_MS + i * SLOT_STAGGER_MS;
     const startTime = performance.now();
     const tickInterval = setInterval(() => {
       if (performance.now() - startTime >= lockAt) {
@@ -73,7 +84,7 @@ function startSlotReveal() {
       } else {
         cell.textContent = LETTERS_AND_SPECIALS[Math.floor(Math.random() * LETTERS_AND_SPECIALS.length)];
       }
-    }, 60);
+    }, SLOT_TICK_MS);
     slotIntervals.push(tickInterval);
   });
 }
@@ -476,6 +487,7 @@ async function triggerSearch() {
   state.isSearching = true;
 
   const term = state.room.current_search_term;
+  const searchStartTime = performance.now();
 
   await db.from('yt_rooms').update({ playback_status: 'searching' })
     .eq('code', state.roomCode);
@@ -512,6 +524,13 @@ async function triggerSearch() {
 
     // Number each item
     pool = pool.map((item, i) => ({ ...item, index: i }));
+
+    // Hold the searching view long enough for the slot reveal to finish + a beat to read.
+    // If the search returned faster than the reveal duration, wait out the remainder.
+    const elapsed = performance.now() - searchStartTime;
+    if (elapsed < SLOT_REVEAL_MIN_MS) {
+      await new Promise(r => setTimeout(r, SLOT_REVEAL_MIN_MS - elapsed));
+    }
 
     // Store results and set status
     await db.from('yt_rooms').update({
