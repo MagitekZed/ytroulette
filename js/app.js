@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=43';
-import * as Hub from './hub.js?v=43';
+import * as UI from './ui.js?v=44';
+import * as Hub from './hub.js?v=44';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -67,6 +67,10 @@ const state = {
   _connStatus: 'ok',
   _skipVoteFiring: false,
   _thumbsGateInterval: null,
+  _showingSelection: false,
+  _selectionTimeout: null,
+  _launchingVideo: false,
+  _launchingTimeout: null,
 };
 
 // Expose state for UI rendering
@@ -526,6 +530,10 @@ function clearSession() {
   if (state._avatarWriteTimer) { clearTimeout(state._avatarWriteTimer); state._avatarWriteTimer = null; }
   state._skipVoteFiring = false;
   if (state._thumbsGateInterval) { clearInterval(state._thumbsGateInterval); state._thumbsGateInterval = null; }
+  state._showingSelection = false;
+  if (state._selectionTimeout) { clearTimeout(state._selectionTimeout); state._selectionTimeout = null; }
+  state._launchingVideo = false;
+  if (state._launchingTimeout) { clearTimeout(state._launchingTimeout); state._launchingTimeout = null; }
   state._connStatus = 'ok';
   const pillHost = document.getElementById('conn-pill-host');
   if (pillHost) pillHost.innerHTML = '';
@@ -1010,32 +1018,91 @@ async function handlePlayerChange(payload) {
 // ============================================================
 function handleHubPlaybackChange() {
   if (!state.isHub) return;
-
-  // Always render first
   debouncedRender();
 
-  if (state.room.playback_status === 'playing') {
-    setTimeout(async () => {
-      // Pattern 4: bail if the user left the room while we were waiting.
-      if (!state.roomCode) return;
-      // Use the video ID stored directly on the room — no stale index lookup
-      const videoId = state.room.selected_video_id;
-
-      if (!videoId) {
-        console.error('No video ID on room for playback');
-        toast('This video can\'t be played. Skipping...', 'error');
-        await db.from('yt_rooms').update({ playback_status: 'stopped' })
-          .eq('code', state.roomCode);
-        return;
-      }
-
-      Hub.playVideo(videoId);
-    }, 200);
+  const playback = state.room?.playback_status;
+  if (playback === 'playing') {
+    runSelectionThenLaunch();
   } else {
     // Any non-playing state: hide the player overlay
-    // (covers 'stopped', 'idle', 'searching', 'selecting', etc.)
     Hub.stopVideo();
   }
+}
+
+function runSelectionThenLaunch() {
+  const selectedIdx = state.room?.selected_video_index;
+  const videoId = state.room?.selected_video_id;
+  if (!videoId || selectedIdx == null) {
+    toast('This video can\'t be played. Skipping...', 'error');
+    db.from('yt_rooms').update({ playback_status: 'stopped' }).eq('code', state.roomCode);
+    return;
+  }
+  state._showingSelection = true;
+  debouncedRender();
+  state._selectionTimeout = setTimeout(() => {
+    state._selectionTimeout = null;
+    if (!state.roomCode) return;
+    state._showingSelection = false;
+    runFlipMorph(selectedIdx, videoId);
+  }, 1800);
+}
+
+function runFlipMorph(idx, videoId) {
+  const tile = document.querySelector(`.hub-thumb[data-thumb-idx="${idx}"]`);
+  const target = document.getElementById('yt-player-wrapper');
+
+  if (!tile || !target) {
+    Hub.playVideo(videoId);
+    return;
+  }
+
+  const from = tile.getBoundingClientRect();
+  // Measure target rect by temporarily un-hiding it (still display:none if .hidden)
+  const wasHidden = target.classList.contains('hidden');
+  if (wasHidden) {
+    target.style.visibility = 'hidden';
+    target.classList.remove('hidden');
+  }
+  const to = target.getBoundingClientRect();
+  if (wasHidden) {
+    target.classList.add('hidden');
+    target.style.visibility = '';
+  }
+
+  tile.classList.remove('hub-thumb--picked');
+  tile.classList.add('hub-thumb--launching');
+  tile.style.position = 'fixed';
+  tile.style.left = from.left + 'px';
+  tile.style.top = from.top + 'px';
+  tile.style.width = from.width + 'px';
+  tile.style.height = from.height + 'px';
+  tile.style.zIndex = '600';
+  tile.style.transition = 'all 420ms cubic-bezier(0.65, 0, 0.35, 1)';
+  tile.style.willChange = 'transform, left, top, width, height';
+
+  // Force reflow so transition fires from the captured "from" rect
+  void tile.offsetWidth;
+
+  tile.style.left = to.left + 'px';
+  tile.style.top = to.top + 'px';
+  tile.style.width = to.width + 'px';
+  tile.style.height = to.height + 'px';
+
+  document.querySelector('.hub-grid')?.classList.add('hub-grid--launching');
+
+  state._launchingVideo = true;
+
+  setTimeout(() => {
+    if (!state.roomCode) return;
+    Hub.playVideo(videoId);
+  }, 360);
+
+  state._launchingTimeout = setTimeout(() => {
+    state._launchingTimeout = null;
+    if (!state.roomCode) return;
+    state._launchingVideo = false;
+    debouncedRender();
+  }, 450);
 }
 
 // ============================================================

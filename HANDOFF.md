@@ -2,7 +2,7 @@
 
 Read this first when picking up the project in a new session. It captures current state, recent decisions, and the next likely thing to work on.
 
-**Last updated:** 2026-04-26 — end of pre-game polish Phase 1 (game-start arc).
+**Last updated:** 2026-04-26 — Batch D shipped (premium tiles + selection beat + FLIP morph).
 
 ---
 
@@ -12,7 +12,7 @@ Read this first when picking up the project in a new session. It captures curren
 - **Stack:** Vanilla JS, no build step. Supabase for realtime + a single Edge Function for the YouTube search. GitHub Pages deploy.
 - **Deploy URL:** `magitekzed.github.io` (root, not a subpath).
 - **Repo:** `https://github.com/MagitekZed/ytroulette`
-- **Current cache-bust:** CSS `?v=43`, JS `?v=43`. Every JS edit bumps this in lockstep across `index.html`, both imports in `js/app.js`, and the import in `js/ui.js`.
+- **Current cache-bust:** CSS `?v=44`, JS `?v=44`. Every JS edit bumps this in lockstep across `index.html`, both imports in `js/app.js`, and the import in `js/ui.js`.
 - **Schema:** `schema.sql` is canonical. Migrations live in `migrations/NNN_name.sql` and are run manually via Supabase SQL Editor.
 
 ---
@@ -37,6 +37,17 @@ Read this first when picking up the project in a new session. It captures curren
 ---
 
 ## Recent work (latest sessions)
+
+### Batch D — Premium tiles + Selection beat + FLIP morph (completed, v44)
+Three coordinated visual upgrades for the Hub mid-game experience.
+
+**Task 1 — Premium tiles:** `.hub-thumb` rebuilt with cinematic gradient mask (`::before`), active-color gloss strip (`::after`), 44px number badge (was 24px) with idle `hubNumBreath` pulse and player-color border via `color-mix`, repositioned YouTube-style duration pill (bottom-right, above the info strip), 2-line clamped title floating over the gradient. Markup re-shuffle: `.hub-thumb-duration` lifted OUT of `.hub-thumb-meta` to be a positioned sibling. Dense-grid demotion via `:has()` selectors — 13+ cells hide views, 16+ cells scale the badge + clamp title to 1 line. Video tiles no longer render the views meta line (only playlist tiles show item count).
+
+**Task 2 — Selection beat (1800ms — bumped from spec's 900ms per comprehension-over-speed):** Picked tile pops with overshoot (scale 1.08 + 3-pulse player-color glow ring + number badge punch); others blur/dim/scale-down. Pick chip slides in from below the picked tile at 180ms with avatar + "NAME PICKED #N" — visible for ~1600ms. New state flags `_showingSelection`, `_selectionTimeout`. The OLD 200ms setTimeout in `handleHubPlaybackChange` was REMOVED — `runSelectionThenLaunch` owns playback start now. Picked tile + chip both `data-morph-skip="true"` so morphdom doesn't yank them mid-animation.
+
+**Task 3 — FLIP morph (450ms):** JS-driven FLIP transform: picked tile expands from grid position to fill `#yt-player-wrapper` rect using `getBoundingClientRect`. Other tiles fade/blur out staggered (`.hub-grid--launching`). `Hub.playVideo` fires at T+360ms (overlapping morph end) so iframe fade-in masks transition completion. Target rect measured by temporarily un-hiding the wrapper (visibility:hidden trick) since `display:none` returns a zero rect. New state flags `_launchingVideo`, `_launchingTimeout`.
+
+Total selection→video bridge: 1800ms beat + 450ms morph = 2250ms. YT buffering (~400-800ms) overlaps with morph; perceived wait ~2200ms.
 
 ### Pre-game polish — Phase 1: game-start arc (completed)
 designer → refiner → project-manager → app-developer pipeline. Total arc from "all ready" to first thumbnail = ~8.6s (countdown + curtain + slot reveal). Full plan in BACKLOG / archived planning notes; Phases 2/3/tail still queued.

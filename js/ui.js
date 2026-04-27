@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=43';
+import { formatDuration } from './hub.js?v=44';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -758,18 +758,32 @@ export function renderHubGame(state) {
             const thumb = video.type === 'playlist' ? (video.firstVideoThumbnail || video.thumbnail) : video.thumbnail;
             const duration = video.type === 'video' ? formatDuration(video.durationSeconds) : '';
             const badge = video.type === 'playlist' ? '<span class="hub-badge-playlist">PLAYLIST</span>' : '';
-            const meta = video.type === 'video'
-              ? `<span class="hub-thumb-duration">${duration}</span><span class="hub-thumb-views">${formatViews(video.viewCount)} views</span>`
-              : `<span class="hub-thumb-duration"></span><span class="hub-thumb-views">${video.itemCount || '?'} videos</span>`;
+            const isPicked = state._showingSelection && i === state.room?.selected_video_index;
+            const isOthers = state._showingSelection && i !== state.room?.selected_video_index;
+            const dataMorphSkip = isPicked ? ' data-morph-skip="true"' : '';
+            const pickedClass = isPicked ? ' hub-thumb--picked' : '';
+            const dimmedClass = isOthers ? ' hub-thumb--others-dimmed' : '';
+            const pickedColor = isPicked ? getPlayerColor(activePlayerId || '') : '';
+            const pickedStyle = isPicked ? ` style="--player-color:${pickedColor}"` : '';
+            let pickChip = '';
+            if (isPicked && activePlayer) {
+              pickChip = `
+                <div class="hub-pick-chip" data-morph-skip="true" style="--player-color:${pickedColor}">
+                  <div class="hub-pick-chip-avatar" style="background:${pickedColor}">${avatarContent(activePlayer)}</div>
+                  <span class="hub-pick-chip-text">${esc(activePlayer.name).toUpperCase()} PICKED <span class="hub-pick-chip-num" style="color:${pickedColor}">#${i + 1}</span></span>
+                </div>`;
+            }
             return `
-              <div class="hub-thumb">
+              <div class="hub-thumb${pickedClass}${dimmedClass}" data-thumb-idx="${i}"${dataMorphSkip}${pickedStyle}>
                 <span class="hub-thumb-num">${i + 1}</span>
                 <img src="${esc(thumb)}" alt="" class="hub-thumb-img" loading="lazy">
+                ${video.type === 'video' && duration ? `<span class="hub-thumb-duration">${duration}</span>` : ''}
                 <div class="hub-thumb-info">
                   ${badge}
                   <span class="hub-thumb-title">${esc(video.title)}</span>
-                  <div class="hub-thumb-meta">${meta}</div>
+                  ${video.type === 'playlist' ? `<div class="hub-thumb-meta"><span class="hub-thumb-views">${video.itemCount || '?'} videos</span></div>` : ''}
                 </div>
+                ${pickChip}
               </div>`;
           }).join('')}
         </div>
