@@ -10,6 +10,48 @@ let onVideoEndCallback = null;
 let pendingVideoId = null;
 let initAttempted = false;
 
+// ---- Per-video elapsed timer (drives #hub-video-timer pill) ----
+let elapsedMs = 0;
+let segmentStart = null;
+let tickInterval = null;
+
+function formatMMSS(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+export function getElapsedSeconds() {
+  return Math.floor((elapsedMs + (segmentStart ? performance.now() - segmentStart : 0)) / 1000);
+}
+
+export function resetTimer() {
+  elapsedMs = 0;
+  segmentStart = null;
+  if (tickInterval) {
+    clearInterval(tickInterval);
+    tickInterval = null;
+  }
+  const el = document.getElementById('hub-video-timer');
+  if (el) {
+    el.textContent = '0:00';
+    el.classList.add('hidden');
+  }
+}
+
+function startTick() {
+  if (tickInterval) clearInterval(tickInterval);
+  const el = document.getElementById('hub-video-timer');
+  if (el) {
+    el.textContent = formatMMSS(getElapsedSeconds());
+    el.classList.remove('hidden');
+  }
+  tickInterval = setInterval(() => {
+    const node = document.getElementById('hub-video-timer');
+    if (node) node.textContent = formatMMSS(getElapsedSeconds());
+  }, 250);
+}
+
 // Initialize the YouTube IFrame API player (call once at hub startup)
 export function initPlayer(onEnd) {
   if (initAttempted) return;
@@ -52,8 +94,21 @@ function createPlayer() {
         }
       },
       onStateChange: (event) => {
-        if (event.data === 0 && onVideoEndCallback) {
-          onVideoEndCallback();
+        // 1=play, 2=pause, 0=end
+        if (event.data === 1) {
+          segmentStart = performance.now();
+          startTick();
+        } else if (event.data === 2 || event.data === 0) {
+          if (segmentStart) {
+            elapsedMs += performance.now() - segmentStart;
+            segmentStart = null;
+          }
+          // Keep showing frozen value on pause; only fully clear on end.
+          if (event.data === 0 && tickInterval) {
+            clearInterval(tickInterval);
+            tickInterval = null;
+          }
+          if (event.data === 0 && onVideoEndCallback) onVideoEndCallback();
         }
       },
       onError: (event) => {
@@ -72,6 +127,7 @@ export function showPlayer() {
 // Hide the player wrapper
 export function hidePlayer() {
   document.getElementById('yt-player-wrapper')?.classList.add('hidden');
+  resetTimer();
   if (player && playerReady) {
     try { player.stopVideo(); } catch { /* ignore */ }
   }
@@ -80,6 +136,7 @@ export function hidePlayer() {
 // Play a video by ID
 export function playVideo(videoId) {
   if (!videoId) return;
+  resetTimer();
 
   if (!player || !playerReady) {
     console.log('Queuing video until player is ready:', videoId);
@@ -106,6 +163,7 @@ export function playVideo(videoId) {
 // Stop playback
 export function stopVideo() {
   pendingVideoId = null;
+  resetTimer();
   hidePlayer();
 }
 
@@ -113,6 +171,7 @@ export function stopVideo() {
 export function destroyPlayer() {
   pendingVideoId = null;
   initAttempted = false;
+  resetTimer();
   hidePlayer();
   if (player) {
     try { player.destroy(); } catch { /* ignore */ }

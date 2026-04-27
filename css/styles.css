@@ -2999,3 +2999,21 @@ input[type="text"]:focus { border-color: var(--red); }
   50%  { background-position:  20% 30%,  80%  70%, 60% 40%; }
   100% { background-position:  10% 60%,  70%  90%, 40% 60%; }
 }
+
+/* Hub video timer pill — overlays the YT wrapper bottom-right */
+.hub-video-timer {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-family: 'Outfit', monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  border-radius: 6px;
+  z-index: 510;
+}
+.hub-video-timer.hidden { display: none; }

@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=33';
-import * as Hub from './hub.js?v=33';
+import * as UI from './ui.js?v=35';
+import * as Hub from './hub.js?v=35';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -344,6 +344,10 @@ async function init() {
 
   setupEventListeners();
 
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
+    document.addEventListener(ev, syncFullscreenButton)
+  );
+
   const savedRoom = localStorage.getItem('yt_room_code');
   const savedName = localStorage.getItem('yt_player_name');
 
@@ -679,7 +683,13 @@ async function handleRoomChange(payload) {
     if (players) state.players = players;
     showView(viewForStatus(state.room.status));
   } else if (state.isHub && !state.isSearching && oldTerm !== state.room.current_search_term) {
-    // Search term changed (superpower used) — re-search takes priority
+    // Search term changed (superpower used / new turn) — re-search takes priority.
+    // M1: optimistically flip to 'searching' so morphdom doesn't paint an empty
+    // grid frame between the term change and triggerSearch's own optimistic flip.
+    if (state.room.playback_status === 'idle') {
+      state.room.playback_status = 'searching';
+      render();
+    }
     await triggerSearch();
   } else if (state.isHub && oldPlayback !== state.room.playback_status) {
     handleHubPlaybackChange();
@@ -792,6 +802,11 @@ async function triggerSearch() {
 
   const term = state.room.current_search_term;
 
+  // Anchor the min-time clock unconditionally — even when an upstream optimistic
+  // flip already set playback_status to 'searching' (M1), the slot reveal still
+  // needs SLOT_REVEAL_MIN_MS from this point to play out in full.
+  const searchStartTime = performance.now();
+
   // Optimistic local update: render the searching view NOW so the slot reveal
   // starts at user-visible time T0, without waiting for the DB write + realtime
   // round-trip echo to come back. (The showView path may have already done this;
@@ -800,9 +815,6 @@ async function triggerSearch() {
     state.room.playback_status = 'searching';
     render();
   }
-  // Anchor the min-time clock to right after the render so the spin animation
-  // has the full SLOT_REVEAL_MIN_MS to play out before the grid replaces it.
-  const searchStartTime = performance.now();
 
   await db.from('yt_rooms').update({ playback_status: 'searching' })
     .eq('code', state.roomCode);
@@ -1013,6 +1025,8 @@ function render() {
   } else {
     stopSlotReveal();
   }
+
+  syncFullscreenButton();
 }
 
 function updateBadge() {
@@ -1464,6 +1478,19 @@ async function forceEndVoting() {
 }
 
 // ============================================================
+// FULLSCREEN HELPER
+// ============================================================
+function syncFullscreenButton() {
+  const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  document.querySelectorAll('.hub-fullscreen-btn').forEach(btn => {
+    const enter = btn.querySelector('.fs-icon-enter');
+    const exit = btn.querySelector('.fs-icon-exit');
+    if (enter) enter.style.display = isFs ? 'none' : '';
+    if (exit) exit.style.display = isFs ? '' : 'none';
+  });
+}
+
+// ============================================================
 // TOAST NOTIFICATIONS
 // ============================================================
 function toast(message, type = 'info') {
@@ -1611,6 +1638,22 @@ function setupEventListeners() {
       case 'cancel-end-game': cancelEndGame(); break;
       case 'dismiss-ended': dismissEnded(); break;
       case 'kick-player': await kickPlayer(value); break;
+      case 'hub-fullscreen': {
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        if (!isFs) {
+          const el = document.documentElement;
+          const req = el.requestFullscreen || el.webkitRequestFullscreen;
+          req?.call(el).catch(err => toast('Fullscreen blocked: ' + err.message, 'error'));
+          if (!localStorage.getItem('yt_fs_hint_seen')) {
+            toast('Press Esc to exit fullscreen.', 'info');
+            localStorage.setItem('yt_fs_hint_seen', '1');
+          }
+        } else {
+          const exit = document.exitFullscreen || document.webkitExitFullscreen;
+          exit?.call(document);
+        }
+        break;
+      }
       // Hub admin actions
       case 'skip-player': await skipPlayer(); break;
       case 're-search': await reSearch(); break;

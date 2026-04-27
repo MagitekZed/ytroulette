@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=33';
+import { formatDuration } from './hub.js?v=35';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -609,20 +609,13 @@ export function renderHubGame(state) {
 
   // If playing video, show fullscreen player
   if (playbackStatus === 'playing') {
-    const selectedVideo = results[state.room?.selected_video_index];
     return `
       <div class="hub-layout">
         <div class="hub-top-bar">
           <span class="hub-game-info">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns} · ${esc(activePlayer?.name || '???')}'s Pick</span>
           <span class="hub-room-code">ROOM: ${state.roomCode}</span>
         </div>
-        <div class="hub-main">
-          <div class="hub-stopped-message">
-            <div style="font-size:3rem;margin-bottom:16px">▶️</div>
-            <h2>Now Playing</h2>
-            <p style="color:var(--text-muted)">${selectedVideo ? esc(selectedVideo.title) : 'Loading video...'}</p>
-          </div>
-        </div>
+        <div class="hub-main"></div>
         ${renderHubAdminBar(state)}
       </div>`;
   }
@@ -888,27 +881,33 @@ function renderHubAdminBar(state, isGameOver = false) {
   const status = state.room?.status;
   const playback = state.room?.playback_status;
 
+  const fsBtn = `<button class="btn btn-sm btn-secondary hub-fullscreen-btn" data-action="hub-fullscreen" aria-label="Toggle fullscreen" title="Toggle fullscreen"><span class="fs-icon-enter">⛶</span><span class="fs-icon-exit" style="display:none">⤢</span></button>`;
+
   let buttons = '';
   if (isGameOver) {
     buttons = `
+      ${fsBtn}
       <button class="btn btn-sm btn-gold" data-action="play-again">🔄 Play Again</button>
       <button class="btn btn-sm btn-text" data-action="leave-game">Leave</button>`;
   } else if (status === 'playing') {
     buttons = `
+      ${fsBtn}
       <button class="btn btn-sm btn-secondary" data-action="skip-player">⏭ Skip Player</button>
       <button class="btn btn-sm btn-secondary" data-action="re-search">🔄 Re-Search</button>
       ${playback === 'playing' ? '<button class="btn btn-sm btn-secondary" data-action="stop-playback">⏹ Stop Video</button>' : ''}
       <button class="btn btn-sm btn-text" data-action="leave-game">✕</button>`;
   } else if (status === 'voting') {
     buttons = `
+      ${fsBtn}
       <button class="btn btn-sm btn-secondary" data-action="force-end-voting">⏩ End Voting</button>
       <button class="btn btn-sm btn-text" data-action="leave-game">✕</button>`;
   } else if (status === 'results') {
     buttons = `
+      ${fsBtn}
       <button class="btn btn-sm btn-gold" data-action="next-round">Next Round →</button>
       <button class="btn btn-sm btn-text" data-action="leave-game">✕</button>`;
   } else {
-    buttons = `<button class="btn btn-sm btn-text" data-action="leave-game">✕ Close Hub</button>`;
+    buttons = `${fsBtn}<button class="btn btn-sm btn-text" data-action="leave-game">✕ Close Hub</button>`;
   }
 
   return `<div class="hub-admin-bar">${buttons}</div>`;
