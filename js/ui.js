@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=44';
+import { formatDuration } from './hub.js?v=45';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -642,8 +642,11 @@ export function renderHubGame(state) {
   const playbackStatus = state.room?.playback_status || 'idle';
   const results = state.room?.search_results || [];
 
-  // If playing video, show fullscreen player
-  if (playbackStatus === 'playing') {
+  // If playing video, show fullscreen player. EXCEPT during the selection
+  // beat / FLIP morph — at those moments room.playback_status is 'playing'
+  // but the grid + picked-tile + pick-chip + morph need to stay visible. Fall
+  // through to the selecting branch in those cases (it renders the grid).
+  if (playbackStatus === 'playing' && !state._showingSelection && !state._launchingVideo) {
     return `
       <div class="hub-layout">
         <div class="hub-top-bar">
