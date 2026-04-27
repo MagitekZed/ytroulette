@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=16';
+import { formatDuration } from './hub.js?v=17';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -319,7 +319,6 @@ export function renderVoting(state) {
   const orderSet = new Set(playerOrder);
   const votedCount = state.players.filter(p => orderSet.has(p.id) && p.vote_for).length;
   const totalPlayers = playerOrder.length;
-  const { voteCounts } = tallyVotes(state);
 
   if (!inRound) {
     return `
@@ -330,55 +329,63 @@ export function renderVoting(state) {
           <div class="vote-progress">${votedCount}/${totalPlayers} votes in</div>
         </div>
         <div class="scrollable-content">
-          ${voteTargets.map(p => {
-            const votes = voteCounts[p.id] || 0;
-            return `
-              <div class="vote-card">
-                <div class="vote-card-player">
-                  <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:36px;height:36px;font-size:0.85rem">${p.name[0].toUpperCase()}</div>
-                  <span class="vote-card-name">${esc(p.name)}</span>
-                </div>
-                <div style="color:var(--text-muted);font-weight:600;font-size:0.85rem">${votes} vote${votes !== 1 ? 's' : ''}</div>
-              </div>`;
-          }).join('')}
+          ${voteTargets.map(p => `
+            <div class="vote-card">
+              <div class="vote-card-player">
+                <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:36px;height:36px;font-size:0.85rem">${p.name[0].toUpperCase()}</div>
+                <span class="vote-card-name">${esc(p.name)}</span>
+              </div>
+            </div>`).join('')}
           <p class="waiting-text">You'll join the next round automatically.</p>
         </div>
         <button class="btn btn-text" data-action="leave-game">Leave Game</button>
       </div>`;
   }
 
+  const voteSlots = [...voteTargets, { id: 'none', name: 'No Winner', isNone: true }];
+  const isHoldout = !hasVoted && votedCount === totalPlayers - 1;
+  const myVoteSlotIdx = hasVoted
+    ? voteSlots.findIndex(s => s.id === me?.vote_for)
+    : -1;
+  const myVoteSlot = myVoteSlotIdx >= 0 ? voteSlots[myVoteSlotIdx] : null;
+
   return `
     <div class="voting-view anim-fade-in">
       <div class="voting-header">
         <h1>Vote for the Best!</h1>
-        <p class="voting-subtitle">Whose video was the most interesting?</p>
+        <p class="voting-subtitle"${isHoldout ? ' style="color:var(--gold);font-weight:700"' : ''}>${isHoldout ? "Everyone's waiting for you..." : 'Whose video was the most interesting?'}</p>
         <div class="vote-progress">${votedCount}/${totalPlayers} votes in</div>
       </div>
       <div class="scrollable-content">
-        ${voteTargets.map(p => {
-          const isSelf = p.id === state.playerId;
-          const votedFor = me?.vote_for === p.id;
-          return `
-            <div class="vote-card ${votedFor ? 'voted-for' : ''}">
-              <div class="vote-card-player">
-                <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:36px;height:36px;font-size:0.85rem">${p.name[0].toUpperCase()}</div>
-                <span class="vote-card-name">${esc(p.name)}${isSelf ? ' (you)' : ''}</span>
-              </div>
-              ${hasVoted
-                ? (votedFor ? '<div style="color:var(--teal);font-weight:600;font-size:0.85rem">✓ Your Vote</div>' : '')
-                : `<button class="btn btn-sm btn-primary btn-full" data-action="cast-vote" data-value="${p.id}">Vote</button>`
-              }
-            </div>`;
-        }).join('')}
-        ${!hasVoted ? `
-          <div class="vote-card">
+        ${hasVoted ? `
+          <div class="vote-card voted-for">
             <div class="vote-card-player">
-              <span class="vote-card-name" style="color:var(--text-muted)">🚫 No Winner</span>
+              ${myVoteSlot && !myVoteSlot.isNone
+                ? `<div class="player-avatar" style="background:${getPlayerColor(myVoteSlot.id)};width:36px;height:36px;font-size:0.85rem">${myVoteSlot.name[0].toUpperCase()}</div>`
+                : '<div class="player-avatar" style="background:var(--surface);width:36px;height:36px;font-size:0.85rem">🚫</div>'}
+              <span class="vote-card-name">${myVoteSlot ? (myVoteSlot.isNone ? 'No Winner' : esc(myVoteSlot.name)) : '???'}</span>
             </div>
-            <button class="btn btn-sm btn-secondary btn-full" data-action="cast-vote" data-value="none">Vote No Winner</button>
-          </div>` : ''}
-        ${hasVoted && me?.vote_for === 'none' ? '<div style="color:var(--text-muted);font-weight:600;font-size:0.85rem;text-align:center;padding:8px">✓ You voted No Winner</div>' : ''}
-        ${hasVoted ? '<p class="waiting-text">Waiting for other players to vote...</p>' : ''}
+            <div style="color:var(--teal);font-weight:600;font-size:0.85rem">✓ Your Vote</div>
+          </div>
+          <p class="waiting-text">Waiting for other players to vote...</p>
+        ` : `
+          <div class="vote-legend">
+            ${voteSlots.map((s, i) => `
+              <div class="vote-legend-row">
+                <span class="vote-legend-num">${i + 1}</span>
+                <span class="vote-legend-name" style="color:${s.isNone ? 'var(--text-muted)' : getPlayerColor(s.id)}">${s.isNone ? '🚫 No Winner' : esc(s.name)}${s.id === state.playerId ? ' (you)' : ''}</span>
+              </div>`).join('')}
+          </div>
+          <div class="number-grid">
+            ${Array.from({ length: 20 }).map((_, i) => {
+              if (i < voteSlots.length) {
+                const s = voteSlots[i];
+                return `<button class="num-cell ${s.isNone ? 'num-cell-none' : ''}" data-action="cast-vote" data-value="${s.id}">${i + 1}</button>`;
+              }
+              return '<button class="num-cell num-cell-empty" disabled></button>';
+            }).join('')}
+          </div>
+        `}
       </div>
       <button class="btn btn-text" data-action="leave-game">Leave Game</button>
     </div>`;
@@ -651,9 +658,16 @@ export function renderHubVoting(state) {
   const votingPlayers = playerOrder
     .map(id => state.players.find(p => p.id === id))
     .filter(Boolean);
-  const votedCount = state.players.filter(p => p.vote_for).length;
-  const totalPlayers = state.players.length;
-  const noneVotes = state.players.filter(p => p.vote_for === 'none').length;
+  const orderSet = new Set(playerOrder);
+  const votedCount = state.players.filter(p => orderSet.has(p.id) && p.vote_for).length;
+  const totalPlayers = playerOrder.length;
+  const noneVotes = state.players.filter(p => orderSet.has(p.id) && p.vote_for === 'none').length;
+  const revealing = state.revealingVotes === true;
+  const lastVoter = (votedCount === totalPlayers - 1)
+    ? state.players.find(p => orderSet.has(p.id) && !p.vote_for)
+    : null;
+
+  const noneIndex = votingPlayers.length;
 
   return `
     <div class="hub-layout">
@@ -664,27 +678,43 @@ export function renderHubVoting(state) {
       <div class="hub-main" style="flex-direction:column;gap:24px;padding:24px">
         <h1 style="text-align:center;font-family:var(--font-heading);font-size:2rem;flex-shrink:0">Cast Your Vote!</h1>
         <div class="hub-vote-grid">
-          ${votingPlayers.map(p => {
+          ${votingPlayers.map((p, i) => {
             const votes = voteCounts[p.id] || 0;
+            const dimClass = lastVoter && p.vote_for ? ' hub-vote-card--voted-dim' : '';
+            const waitingClass = lastVoter && p.id === lastVoter.id ? ' hub-vote-card--waiting' : '';
+            const countHtml = revealing
+              ? `<div class="hub-vote-count hub-vote-count--reveal">${votes} vote${votes !== 1 ? 's' : ''}</div>`
+              : `<div class="hub-vote-count hub-vote-count--hidden">&nbsp;</div>`;
             return `
-              <div class="hub-vote-card">
+              <div class="hub-vote-card${dimClass}${waitingClass}">
+                <span class="hub-vote-badge">${i + 1}</span>
                 ${p.picked_video_thumbnail ? `<img src="${esc(p.picked_video_thumbnail)}" class="hub-vote-thumb">` : '<div class="hub-vote-thumb-empty">🎬</div>'}
                 <div class="hub-vote-info">
                   <div class="hub-vote-player" style="color:${getPlayerColor(p.id)}">${esc(p.name)}</div>
                   <div class="hub-vote-title">${esc(p.picked_video_title || 'No video')}</div>
-                  <div class="hub-vote-count">${votes} vote${votes !== 1 ? 's' : ''}</div>
+                  ${countHtml}
                 </div>
               </div>`;
           }).join('')}
-          ${noneVotes > 0 ? `
-            <div class="hub-vote-card">
-              <div class="hub-vote-thumb-empty">🚫</div>
-              <div class="hub-vote-info">
-                <div class="hub-vote-player" style="color:var(--text-muted)">No Winner</div>
-                <div class="hub-vote-count">${noneVotes} vote${noneVotes !== 1 ? 's' : ''}</div>
-              </div>
-            </div>` : ''}
+          <div class="hub-vote-card">
+            <span class="hub-vote-badge">${noneIndex + 1}</span>
+            <div class="hub-vote-thumb-empty">🚫</div>
+            <div class="hub-vote-info">
+              <div class="hub-vote-player" style="color:var(--text-muted)">No Winner</div>
+              <div class="hub-vote-title">&nbsp;</div>
+              ${revealing
+                ? `<div class="hub-vote-count hub-vote-count--reveal">${noneVotes} vote${noneVotes !== 1 ? 's' : ''}</div>`
+                : `<div class="hub-vote-count hub-vote-count--hidden">&nbsp;</div>`}
+            </div>
+          </div>
         </div>
+        ${revealing ? '' : `
+          <div class="hub-vote-pending-strip">
+            ${votingPlayers.map(p => {
+              const voted = !!p.vote_for;
+              return `<div class="player-avatar hub-vote-pending-avatar ${voted ? '' : 'hub-vote-pending-avatar--pending'}" style="background:${voted ? getPlayerColor(p.id) : 'var(--surface)'}">${esc(p.name[0].toUpperCase())}</div>`;
+            }).join('')}
+          </div>`}
       </div>
       ${renderHubAdminBar(state)}
     </div>`;

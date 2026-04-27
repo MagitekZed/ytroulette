@@ -1375,12 +1375,70 @@ input[type="text"]:focus { border-color: var(--red); }
   width: 100%;
 }
 .hub-vote-card {
+  position: relative;
   display: flex;
   gap: 14px;
   padding: 16px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+}
+.hub-vote-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--gold);
+  color: black;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  min-width: 28px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  z-index: 2;
+}
+.hub-vote-card--voted-dim {
+  opacity: 0.45;
+  transition: opacity 0.3s;
+}
+.hub-vote-card--waiting {
+  animation: holdoutPulse 1.4s ease-in-out infinite;
+  box-shadow: 0 0 0 2px var(--gold), 0 0 24px 4px color-mix(in srgb, var(--gold) 50%, transparent);
+}
+@keyframes holdoutPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+.hub-vote-count--hidden {
+  visibility: hidden;
+}
+.hub-vote-count--reveal {
+  animation: voteRevealPulse 1.5s ease-out;
+}
+@keyframes voteRevealPulse {
+  0% { transform: scale(0.8); opacity: 0; }
+  30% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.hub-vote-pending-strip {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.hub-vote-pending-avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 0.75rem;
+}
+.hub-vote-pending-avatar--pending {
+  opacity: 0.3;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
 }
 .hub-vote-thumb {
   width: 120px;
@@ -1532,6 +1590,48 @@ input[type="text"]:focus { border-color: var(--red); }
   color: var(--text-dim);
   opacity: 0.3;
   cursor: not-allowed;
+}
+.num-cell-none {
+  border-color: rgba(255, 107, 107, 0.4);
+  color: #FF6B6B;
+}
+.num-cell-none:hover:not(.num-cell-empty) {
+  border-color: #FF6B6B;
+  color: #FF6B6B;
+}
+
+/* Vote legend (phone voting number→name map) */
+.vote-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+.vote-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+}
+.vote-legend-num {
+  font-family: var(--font-heading);
+  font-weight: 900;
+  background: var(--gold);
+  color: black;
+  border-radius: 999px;
+  min-width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+}
+.vote-legend-name {
+  font-weight: 600;
 }
 
 /* Playback controls */

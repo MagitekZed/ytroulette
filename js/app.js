@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=16';
-import * as Hub from './hub.js?v=16';
+import * as UI from './ui.js?v=17';
+import * as Hub from './hub.js?v=17';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -41,6 +41,7 @@ const state = {
   confirmLeave: false,    // Hub leave confirmation dialog
   _pollInterval: null,    // Handle for the 2s poll fallback
   _lastTalliedRound: null, // Per-round dedupe token for tallyAndAdvance (anti double-score)
+  revealingVotes: false,  // Hub-only: 1.5s blind-vote reveal window after final vote
 };
 
 // Expose state for UI rendering
@@ -842,6 +843,10 @@ async function tallyAndAdvance() {
 
     state._lastTalliedRound = round;
 
+    state.revealingVotes = true;
+    render();
+    await new Promise(r => setTimeout(r, 1500));
+
     await new Promise(r => setTimeout(r, 300));
 
     const { data: updated } = await db.from('yt_players').select().eq('room_code', state.roomCode);
@@ -853,6 +858,7 @@ async function tallyAndAdvance() {
       .eq('code', state.roomCode);
   } finally {
     state.isProcessing = false;
+    state.revealingVotes = false;
   }
 }
 
