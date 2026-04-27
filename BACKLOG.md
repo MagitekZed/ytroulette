@@ -2,6 +2,20 @@
 
 Ideas evaluated and shelved for later. Not rejected outright — just not in the current build queue.
 
+## handleHubPlaybackChange 200ms playVideo delay
+
+**Source:** Concurrency hardening audit 2026-04-27.
+
+**The pitch:** `handleHubPlaybackChange` schedules `Hub.playVideo(...)` inside a 200ms `setTimeout` (a holdover from earlier render-vs-playback ordering work). Now that Tasks 2/3 (selection beat + FLIP morph) own the bridge into playback explicitly, this 200ms delay may be redundant or actively fighting the new choreography.
+
+**Why deferred:** Not breaking anything today. Worth a careful review when Tasks 2/3 land — likely candidate to remove entirely or fold into the morph timing.
+
+**Rough scope:** XS investigate, XS-S to remove. Single setTimeout in `js/app.js` `handleHubPlaybackChange`.
+
+**Dependencies:** Easier to evaluate after Batch D ships.
+
+---
+
 ## Home form-card: cancel / back affordance
 
 **Source:** Playtest 2026-04-27.

@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=38';
-import * as Hub from './hub.js?v=38';
+import * as UI from './ui.js?v=39';
+import * as Hub from './hub.js?v=39';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -834,6 +834,11 @@ async function handleRoomChange(payload) {
     // grid frame between the term change and triggerSearch's own optimistic flip.
     // H1 coordination: while the turn banner is up, suppress the optimistic flip
     // AND defer triggerSearch — banner's setTimeout tail fires triggerSearch.
+    // Hide the YT player wrapper at the start of a turn transition so the
+    // banner + slot reveal are visible. Without this, the iframe persists
+    // ~4s behind them because handleHubPlaybackChange's playback-change
+    // branch never fires (we entered the term-change branch first).
+    if (oldPlayback === 'playing') Hub.stopVideo();
     if (state.room.playback_status === 'idle' && !state._showingTurnBanner) {
       state.room.playback_status = 'searching';
       render();
@@ -1148,6 +1153,11 @@ function render() {
   window.morphdom(app, temp, {
     childrenOnly: true,
     onBeforeElUpdated(fromEl, toEl) {
+      // Generic morph-skip — any element flagged with data-morph-skip="true"
+      // is left alone (JS owns its DOM/textContent lifecycle). Used by the
+      // hub video timer (textContent ticked at 250ms by Hub.startTick) and
+      // any future JS-owned inline element.
+      if (fromEl.dataset && fromEl.dataset.morphSkip === 'true') return false;
       // Slot-reveal cells are owned by JS once the reveal starts. Skip morphdom
       // updates on rolling/locked cells unless the term itself has changed
       // (different data-final-char). This prevents debouncedRender from yanking

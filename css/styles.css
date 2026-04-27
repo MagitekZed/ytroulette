@@ -1552,8 +1552,8 @@ input[type="text"]:focus { border-color: var(--red); }
   gap: 2px;
 }
 .hub-thumb-title {
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 1.05rem;
+  font-weight: 700;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
@@ -1566,12 +1566,13 @@ input[type="text"]:focus { border-color: var(--red); }
   gap: 6px;
 }
 .hub-thumb-duration {
-  font-size: 0.75rem;
+  font-size: 0.9rem;
   color: var(--text-muted);
-  font-weight: 600;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .hub-thumb-views {
-  font-size: 0.7rem;
+  font-size: 0.82rem;
   color: var(--text-dim);
 }
 .hub-badge-playlist {
@@ -1713,13 +1714,30 @@ input[type="text"]:focus { border-color: var(--red); }
   opacity: 0.45;
   transition: opacity 0.3s;
 }
-.hub-vote-card--waiting {
-  animation: holdoutPulse 1.4s ease-in-out infinite;
-  box-shadow: 0 0 0 2px var(--gold), 0 0 24px 4px color-mix(in srgb, var(--gold) 50%, transparent);
+/* Holdout highlight — pulses the PLAYER name + a "still voting…" tag, NOT the
+   whole video card. Players reading the screen at-a-glance want to know which
+   PERSON to nudge, not which video is special. */
+.hub-vote-player--waiting {
+  animation: holdoutNamePulse 1.2s ease-in-out infinite;
+  text-shadow: 0 0 12px var(--gold), 0 0 24px var(--gold);
 }
-@keyframes holdoutPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.03); }
+@keyframes holdoutNamePulse {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50%      { transform: scale(1.06); filter: brightness(1.25); }
+}
+.hub-vote-still-voting {
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--gold);
+  text-transform: uppercase;
+  margin-top: 2px;
+  animation: holdoutTagBlink 1.2s ease-in-out infinite;
+}
+@keyframes holdoutTagBlink {
+  0%, 100% { opacity: 0.65; }
+  50%      { opacity: 1; }
 }
 .hub-vote-count--hidden {
   visibility: hidden;
@@ -3073,13 +3091,13 @@ input[type="text"]:focus { border-color: var(--red); }
 }
 
 /* Hub video timer pill — overlays the YT wrapper bottom-right */
+/* Hub video timer — lives inline in the admin bar (only when playback === 'playing').
+   data-morph-skip keeps morphdom from stomping the textContent that Hub.startTick
+   updates every 250ms. margin-left: auto pushes it to the right end of the bar. */
 .hub-video-timer {
-  position: fixed;
-  bottom: 18px;
-  left: 75%;
-  transform: translateX(-50%);
-  padding: 8px 18px;
-  background: rgba(0, 0, 0, 0.78);
+  margin-left: auto;
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #fff;
   font-family: 'Outfit', monospace;
@@ -3088,7 +3106,4 @@ input[type="text"]:focus { border-color: var(--red); }
   font-size: 1.05rem;
   letter-spacing: 0.06em;
   border-radius: 8px;
-  z-index: 600;
-  pointer-events: none;
 }
-.hub-video-timer.hidden { display: none; }
