@@ -3111,3 +3111,69 @@ input[type="text"]:focus { border-color: var(--red); }
   letter-spacing: 0.06em;
   border-radius: 8px;
 }
+
+/* Phone-side thumbs-down skip vote */
+.thumbs-down-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(255, 0, 0, 0.04);
+  border: 1px solid rgba(255, 0, 0, 0.15);
+  border-radius: 12px;
+}
+.btn-thumbs-down {
+  position: relative;
+  padding: 14px 20px;
+  background: rgba(255, 0, 0, 0.1);
+  border: 2px solid rgba(255, 0, 0, 0.4);
+  border-radius: 10px;
+  color: #FF6666;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 180ms ease-out;
+}
+.btn-thumbs-down:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-thumbs-down.is-pressed {
+  background: linear-gradient(135deg, var(--red), var(--red-dark));
+  border-color: var(--red);
+  color: white;
+  box-shadow: 0 0 16px rgba(255, 0, 0, 0.4);
+}
+.thumbs-gate-countdown {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  font-family: 'Outfit', monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+.thumbs-down-tally {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* Hub-side skip tally chip in admin bar */
+.hub-skip-tally {
+  margin-right: auto;
+  padding: 6px 14px;
+  background: rgba(255, 0, 0, 0.15);
+  border: 1px solid rgba(255, 0, 0, 0.4);
+  border-radius: 8px;
+  color: #FF6666;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}

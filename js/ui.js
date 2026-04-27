@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=42';
+import { formatDuration } from './hub.js?v=43';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -201,8 +201,41 @@ export function renderGame(state) {
     }
     return `<div class="game-view anim-fade-in">${header}<div class="scrollable-content">${termSection}${renderMyControls(state)}</div>${leaveBtn}</div>`;
   } else {
-    return `<div class="game-view anim-fade-in">${header}<div class="scrollable-content">${termSection}${renderWaitingMessage(activePlayer, playbackStatus)}</div>${leaveBtn}</div>`;
+    return `<div class="game-view anim-fade-in">${header}<div class="scrollable-content">${termSection}${renderWaitingMessage(activePlayer, playbackStatus, state)}</div>${leaveBtn}</div>`;
   }
+}
+
+// Phone-side thumbs-down skip-vote bar.
+// Renders only when:
+//   - playback_status === 'playing'
+//   - the local player is in player_order (mid-game joiners excluded)
+// 60s gate disables the button until video_started_at + 60s elapses.
+function renderThumbsDownBar(state) {
+  if (state.room?.playback_status !== 'playing') return '';
+  const orderSet = new Set(state.room?.player_order || []);
+  if (!orderSet.has(state.playerId)) return '';
+  const me = state.players.find(p => p.id === state.playerId);
+  const startedAt = state.room?.video_started_at ? new Date(state.room.video_started_at).getTime() : null;
+  const elapsed = startedAt ? Date.now() - startedAt : 0;
+  const gateOpen = !!startedAt && elapsed >= 60000;
+  const remaining = Math.max(0, Math.ceil((60000 - elapsed) / 1000));
+  const remainingMMSS = `0:${String(remaining).padStart(2, '0')}`;
+  const thumbsCount = state.players.filter(p => orderSet.has(p.id) && p.thumbs_down).length;
+  const totalEligible = orderSet.size;
+  const threshold = Math.floor(totalEligible / 2) + 1;
+  const pressed = !!me?.thumbs_down;
+  const label = pressed ? 'I want to skip' : 'Skip this?';
+  const countdown = gateOpen ? '' : `<span class="thumbs-gate-countdown">${remainingMMSS}</span>`;
+  return `
+    <div class="thumbs-down-bar">
+      <button class="btn btn-thumbs-down ${pressed ? 'is-pressed' : ''}"
+              data-action="toggle-thumbs-down"
+              ${gateOpen ? '' : 'disabled'}>
+        👎 ${label}
+        ${countdown}
+      </button>
+      <div class="thumbs-down-tally">${thumbsCount}/${threshold} to skip</div>
+    </div>`;
 }
 
 // Player controls for hub-mode game — numbered grid + playback controls
@@ -233,6 +266,7 @@ function renderPlayerHubControls(state, playbackStatus) {
         <p style="color:var(--gold);font-weight:600;text-align:center;margin:12px 0">🎬 Now Playing: ${esc(selectedVideo?.title || 'Video')}</p>
         <button class="btn btn-primary btn-full" data-action="stop-playback">⏹ Stop Video</button>
         <button class="btn btn-gold btn-full" data-action="stop-and-next">⏹ Stop & Next →</button>
+        ${renderThumbsDownBar(state)}
       </div>`;
   }
 
@@ -332,7 +366,7 @@ function renderMyControls(state) {
     </button>`;
 }
 
-function renderWaitingMessage(activePlayer, playbackStatus) {
+function renderWaitingMessage(activePlayer, playbackStatus, state) {
   const color = activePlayer ? getPlayerColor(activePlayer.id) : 'var(--text-muted)';
   const status =
     playbackStatus === 'searching' ? '🔍 Searching YouTube...' :
@@ -350,6 +384,7 @@ function renderWaitingMessage(activePlayer, playbackStatus) {
         Waiting for <strong style="color:${color}">${esc(activePlayer?.name || '???')}</strong> to finish...
       </div>
       <div class="waiting-status">${status}</div>
+      ${state ? renderThumbsDownBar(state) : ''}
     </div>`;
 }
 
@@ -906,6 +941,18 @@ function renderHubAdminBar(state, isGameOver = false) {
     ? `<div id="hub-video-timer" class="hub-video-timer" data-morph-skip="true">0:00</div>`
     : '';
 
+  // Skip-vote tally chip — left-aligned via margin-right: auto (mirrors the
+  // timer's right-align pattern). The count is re-rendered from state on every
+  // debouncedRender pass, so we let morphdom diff it normally.
+  let skipTally = '';
+  if (playback === 'playing' && state.room?.video_started_at && state.players.length > 0) {
+    const orderSet = new Set(state.room?.player_order || []);
+    const eligible = state.players.filter(p => orderSet.has(p.id));
+    const yes = eligible.filter(p => p.thumbs_down).length;
+    const threshold = Math.floor(eligible.length / 2) + 1;
+    skipTally = `<div class="hub-skip-tally">👎 ${yes}/${threshold}</div>`;
+  }
+
   let buttons = '';
   if (isGameOver) {
     buttons = `
@@ -914,6 +961,7 @@ function renderHubAdminBar(state, isGameOver = false) {
       <button class="btn btn-sm btn-text" data-action="leave-game">Leave</button>`;
   } else if (status === 'playing') {
     buttons = `
+      ${skipTally}
       ${fsBtn}
       <button class="btn btn-sm btn-secondary" data-action="skip-player">⏭ Skip Player</button>
       <button class="btn btn-sm btn-secondary" data-action="re-search">🔄 Re-Search</button>

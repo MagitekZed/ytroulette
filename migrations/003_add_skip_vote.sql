@@ -1,0 +1,2 @@
+ALTER TABLE yt_players ADD COLUMN IF NOT EXISTS thumbs_down BOOLEAN DEFAULT false;
+ALTER TABLE yt_rooms   ADD COLUMN IF NOT EXISTS video_started_at TIMESTAMPTZ;

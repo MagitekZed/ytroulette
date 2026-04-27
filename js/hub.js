@@ -9,6 +9,10 @@ let playerReady = false;
 let onVideoEndCallback = null;
 let pendingVideoId = null;
 let initAttempted = false;
+let onFirstPlayCallback = null;
+let firstPlayFired = false;
+
+export function setFirstPlayCallback(fn) { onFirstPlayCallback = fn; }
 
 // ---- Per-video elapsed timer (drives #hub-video-timer pill) ----
 let elapsedMs = 0;
@@ -98,6 +102,10 @@ function createPlayer() {
         if (event.data === 1) {
           segmentStart = performance.now();
           startTick();
+          if (!firstPlayFired) {
+            firstPlayFired = true;
+            if (onFirstPlayCallback) onFirstPlayCallback();
+          }
         } else if (event.data === 2 || event.data === 0) {
           if (segmentStart) {
             elapsedMs += performance.now() - segmentStart;
@@ -136,6 +144,7 @@ export function hidePlayer() {
 // Play a video by ID
 export function playVideo(videoId) {
   if (!videoId) return;
+  firstPlayFired = false;
   resetTimer();
 
   if (!player || !playerReady) {

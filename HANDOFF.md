@@ -12,7 +12,7 @@ Read this first when picking up the project in a new session. It captures curren
 - **Stack:** Vanilla JS, no build step. Supabase for realtime + a single Edge Function for the YouTube search. GitHub Pages deploy.
 - **Deploy URL:** `magitekzed.github.io` (root, not a subpath).
 - **Repo:** `https://github.com/MagitekZed/ytroulette`
-- **Current cache-bust:** CSS `?v=33`, JS `?v=33`. Every JS edit bumps this in lockstep across `index.html`, both imports in `js/app.js`, and the import in `js/ui.js`.
+- **Current cache-bust:** CSS `?v=43`, JS `?v=43`. Every JS edit bumps this in lockstep across `index.html`, both imports in `js/app.js`, and the import in `js/ui.js`.
 - **Schema:** `schema.sql` is canonical. Migrations live in `migrations/NNN_name.sql` and are run manually via Supabase SQL Editor.
 
 ---

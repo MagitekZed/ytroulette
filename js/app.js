@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=42';
-import * as Hub from './hub.js?v=42';
+import * as UI from './ui.js?v=43';
+import * as Hub from './hub.js?v=43';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -21,6 +21,7 @@ const LETTERS_AND_SPECIALS = LETTERS + SPECIALS;
 const EMOJI_AVATARS = ['🎮','🦄','🚀','🐙','🍕','👻','🎯','🦖','⚡','🧙','🌮','🦊','🤖','🍄','🐸','🎸','👑','🐝','☄️','🎲'];
 const DEFAULT_WIN_SCORE = 3;
 const TERM_LENGTH = 4;
+const THUMBS_DOWN_GATE_MS = 60_000;
 
 const reducedMotion = () => false;
 
@@ -64,6 +65,8 @@ const state = {
   _turnBannerTimeout: null,
   _autoAdvanceTimer: null,
   _connStatus: 'ok',
+  _skipVoteFiring: false,
+  _thumbsGateInterval: null,
 };
 
 // Expose state for UI rendering
@@ -152,6 +155,29 @@ function clearBanner() {
   if (!el) return;
   el.classList.remove('is-active', 'hub-banner--join', 'hub-banner--turn');
   el.innerHTML = '';
+}
+
+// --- Thumbs-down 60s gate ticker (phones only) ---
+// Drives the visible "0:42" countdown on the skip-vote button. DB updates
+// don't arrive every second, so without this ticker the button would jump
+// from disabled to enabled with no countdown animation.
+function startThumbsGateTicker() {
+  if (state._thumbsGateInterval) return;
+  state._thumbsGateInterval = setInterval(() => {
+    if (!state.roomCode) { stopThumbsGateTicker(); return; }
+    if (state.room?.playback_status !== 'playing') { stopThumbsGateTicker(); return; }
+    const startedAt = state.room?.video_started_at ? new Date(state.room.video_started_at).getTime() : null;
+    if (startedAt && (Date.now() - startedAt) >= THUMBS_DOWN_GATE_MS) {
+      stopThumbsGateTicker();
+    }
+    debouncedRender();
+  }, 1000);
+}
+function stopThumbsGateTicker() {
+  if (state._thumbsGateInterval) {
+    clearInterval(state._thumbsGateInterval);
+    state._thumbsGateInterval = null;
+  }
 }
 
 // --- Ready-up countdown (Step 1.1) ---
@@ -498,6 +524,8 @@ function clearSession() {
   if (state._turnBannerTimeout) { clearTimeout(state._turnBannerTimeout); state._turnBannerTimeout = null; }
   if (state._autoAdvanceTimer) { clearInterval(state._autoAdvanceTimer); state._autoAdvanceTimer = null; }
   if (state._avatarWriteTimer) { clearTimeout(state._avatarWriteTimer); state._avatarWriteTimer = null; }
+  state._skipVoteFiring = false;
+  if (state._thumbsGateInterval) { clearInterval(state._thumbsGateInterval); state._thumbsGateInterval = null; }
   state._connStatus = 'ok';
   const pillHost = document.getElementById('conn-pill-host');
   if (pillHost) pillHost.innerHTML = '';
@@ -548,6 +576,11 @@ async function attemptHubRejoin(roomCode) {
         await db.from('yt_rooms').update({ playback_status: 'stopped' })
           .eq('code', state.roomCode);
       }
+    });
+    Hub.setFirstPlayCallback(async () => {
+      if (!state.isHub || !state.roomCode) return;
+      await db.from('yt_rooms').update({ video_started_at: new Date().toISOString() })
+        .eq('code', state.roomCode);
     });
 
     subscribeToRoom(roomCode);
@@ -635,6 +668,11 @@ async function createHubRoom(winScore) {
       await db.from('yt_rooms').update({ playback_status: 'stopped' })
         .eq('code', state.roomCode);
     }
+  });
+  Hub.setFirstPlayCallback(async () => {
+    if (!state.isHub || !state.roomCode) return;
+    await db.from('yt_rooms').update({ video_started_at: new Date().toISOString() })
+      .eq('code', state.roomCode);
   });
 
   await loadRoom(code);
@@ -783,6 +821,15 @@ async function handleRoomChange(payload) {
     state.swapFirstIndex = null;
   }
 
+  // Phone-side thumbs-down gate ticker — start/stop on playback transitions.
+  if (!state.isHub) {
+    if (oldPlayback !== 'playing' && state.room.playback_status === 'playing') {
+      startThumbsGateTicker();
+    } else if (oldPlayback === 'playing' && state.room.playback_status !== 'playing') {
+      stopThumbsGateTicker();
+    }
+  }
+
   // Phone-side polish triggers (M5/H1/H2). Hub doesn't render the phone num-grid
   // or the per-player turn entrance, so these are gated on !state.isHub.
   if (!state.isHub) {
@@ -901,6 +948,28 @@ async function handlePlayerChange(payload) {
     }
     if (state._showingCountdown && !state.isProcessing && !state.players.every(p => p.ready)) {
       abortCountdown();
+    }
+    // Hub-side skip-vote threshold check. _skipVoteFiring debounces against
+    // multiple thumbs_down echoes arriving in the same millisecond window —
+    // without it, three players' updates could each cross the threshold and
+    // fire stopAndNext three times.
+    if (state.isHub && state.room?.status === 'playing' && state.room?.playback_status === 'playing'
+        && !state._skipVoteFiring) {
+      const orderSet = new Set(state.room.player_order || []);
+      const eligible = state.players.filter(p => orderSet.has(p.id));
+      const yesCount = eligible.filter(p => p.thumbs_down).length;
+      const threshold = Math.floor(eligible.length / 2) + 1;
+      const startedAt = state.room?.video_started_at;
+      const gateOpen = startedAt && (Date.now() - new Date(startedAt).getTime()) >= THUMBS_DOWN_GATE_MS;
+      if (gateOpen && yesCount >= threshold) {
+        state._skipVoteFiring = true;
+        try {
+          toast('Skipped by majority vote.', 'info');
+          await stopAndNext();
+        } finally {
+          state._skipVoteFiring = false;
+        }
+      }
     }
   } else if (payload.eventType === 'DELETE') {
     state.players = state.players.filter(p => p.id !== payload.old?.id);
@@ -1281,6 +1350,7 @@ async function startGame() {
       has_reroll: true, has_replace: true, has_swap: true,
       selected_video: null, vote_for: null,
       picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
+      thumbs_down: false,
     }).eq('room_code', state.roomCode);
 
     await db.from('yt_rooms').update({
@@ -1307,6 +1377,23 @@ async function toggleReady() {
   const me = getMe();
   if (!me) return;
   await db.from('yt_players').update({ ready: !me.ready })
+    .eq('id', state.playerId).eq('room_code', state.roomCode);
+}
+
+async function toggleThumbsDown() {
+  if (state.isHub) return;
+  const me = getMe();
+  if (!me) return;
+  if (!state.room?.player_order?.includes(state.playerId)) return; // spectator
+  if (state.room?.playback_status !== 'playing') return;
+  // Defense-in-depth gate check (UI already disables the button)
+  const startedAt = state.room?.video_started_at;
+  if (!startedAt || (Date.now() - new Date(startedAt).getTime()) < THUMBS_DOWN_GATE_MS) return;
+  // Pattern 2: optimistic local update — flip the local flag and render
+  // before the DB round-trip so a fast double-tap is naturally debounced.
+  me.thumbs_down = !me.thumbs_down;
+  debouncedRender();
+  await db.from('yt_players').update({ thumbs_down: me.thumbs_down })
     .eq('id', state.playerId).eq('room_code', state.roomCode);
 }
 
@@ -1406,11 +1493,18 @@ async function selectVideo(index) {
 
   const videoId = video.type === 'playlist' ? video.firstVideoId : video.videoId;
 
+  // New video → prior thumbs_down votes are stale. Sweep the player table
+  // BEFORE the room update so the gate-on-new-video reads clean votes.
+  // video_started_at is cleared here too — Hub.setFirstPlayCallback will
+  // populate it when the new video actually plays.
+  await db.from('yt_players').update({ thumbs_down: false }).eq('room_code', state.roomCode);
+
   // Write A: room (drives the playback transition).
   const { error: roomErr } = await db.from('yt_rooms').update({
     selected_video_index: index,
     selected_video_id: videoId,
     playback_status: 'playing',
+    video_started_at: null,
   }).eq('code', state.roomCode);
   if (roomErr) {
     console.error('selectVideo room update failed:', roomErr);
@@ -1448,6 +1542,9 @@ async function stopPlayback() {
 }
 
 async function stopAndNext() {
+  // Defensive guard: prevents double-fire when both the user clicks Stop & Next
+  // and a skip-vote crosses the threshold in the same realtime echo window.
+  if (state.room?.playback_status !== 'playing') return;
   // Single write — finishTurn writes playback_status='idle' alongside the new
   // current_player_index + term, so the Hub gets one realtime echo and the
   // turn banner fires cleanly. Hub.stopVideo() still triggers via
@@ -1460,6 +1557,11 @@ async function stopAndNext() {
 async function finishTurn() {
   const pastTerms = [...(state.room.past_terms || []), state.room.current_search_term];
   const nextIdx = (state.room.current_player_index || 0) + 1;
+
+  // Reset thumbs_down on every turn boundary BEFORE the room update so the
+  // realtime echoes arrive in a coherent order (player resets first, then the
+  // room's current_player_index / status flip).
+  await db.from('yt_players').update({ thumbs_down: false }).eq('room_code', state.roomCode);
 
   if (nextIdx >= (state.room.player_order?.length || 0)) {
     // All players done → voting
@@ -1594,6 +1696,7 @@ async function nextRound() {
     await db.from('yt_players').update({
       selected_video: null, vote_for: null,
       picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
+      thumbs_down: false,
     }).eq('room_code', state.roomCode);
   } finally {
     state.isProcessing = false;
@@ -1619,6 +1722,7 @@ async function playAgain() {
     score: 0, has_reroll: true, has_replace: true, has_swap: true,
     selected_video: null, vote_for: null, ready: false,
     picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
+    thumbs_down: false,
   }).eq('room_code', state.roomCode);
 }
 
@@ -1675,6 +1779,8 @@ async function kickPlayer(playerId) {
     }
 
     if (state.room.status === 'playing' && kickedIdx === (state.room.current_player_index || 0)) {
+      // Turn advance — flush stale thumbs_down votes for the new turn.
+      await db.from('yt_players').update({ thumbs_down: false }).eq('room_code', state.roomCode);
       let newIdx = state.room.current_player_index || 0;
       if (newIdx >= newOrder.length) {
         await db.from('yt_rooms').update({ status: 'voting', player_order: newOrder })
@@ -1766,7 +1872,7 @@ function toast(message, type = 'info') {
 // ============================================================
 function setupEventListeners() {
   const tap = () => { try { navigator.vibrate?.(10); } catch {} };
-  const VIBRATE_ACTIONS = new Set(['select-video','cast-vote','reroll','enter-replace','replace-char','enter-swap','swap-char','toggle-ready','finish-turn','stop-and-next','cycle-avatar']);
+  const VIBRATE_ACTIONS = new Set(['select-video','cast-vote','reroll','enter-replace','replace-char','enter-swap','swap-char','toggle-ready','finish-turn','stop-and-next','cycle-avatar','toggle-thumbs-down']);
 
   document.getElementById('app').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-action]');
@@ -1885,6 +1991,7 @@ function setupEventListeners() {
       case 'select-video': await selectVideo(parseInt(value)); break;
       case 'stop-playback': await stopPlayback(); break;
       case 'stop-and-next': await stopAndNext(); break;
+      case 'toggle-thumbs-down': await toggleThumbsDown(); break;
       case 'finish-turn': await finishTurn(); break;
       case 'cast-vote': await castVote(value); break;
       case 'next-round': await nextRound(); break;
