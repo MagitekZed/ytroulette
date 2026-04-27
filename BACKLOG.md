@@ -2,6 +2,20 @@
 
 Ideas evaluated and shelved for later. Not rejected outright — just not in the current build queue.
 
+## Home form-card: cancel / back affordance
+
+**Source:** Playtest 2026-04-27.
+
+**The pitch:** On the home screen, clicking "Host the Hub Display", "Create Game (Phone)", or "Join Game" reveals a form card. There's no cancel/back button to close that card and return to the three-button picker. Currently the only way out is to refresh the page.
+
+**Why deferred:** Not blocking — the form cards still work as intended once you've committed. The friction is on accidental clicks and "let me reconsider" moments. Page refresh is an acceptable workaround for now.
+
+**Rough scope:** XS. Add a small `← back` text-button (or `×` close affordance in the corner) to each form card. Clicking it just hides the open card and re-shows the home button stack. Already handled by the existing `show-hub` / `show-create` / `show-join` toggle mechanism — likely just needs a new `data-action="hide-form-cards"` button per card and a handler that strips the visible class. Apply on both mobile and desktop.
+
+**Dependencies:** None.
+
+---
+
 ## Round Recap Reel
 
 **Source:** UX/UI brainstorm 2026-04-26, idea #15.
