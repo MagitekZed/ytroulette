@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=14';
-import * as Hub from './hub.js?v=14';
+import * as UI from './ui.js?v=15';
+import * as Hub from './hub.js?v=15';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -55,6 +55,9 @@ async function init() {
     localStorage.setItem('yt_player_id', state.playerId);
   }
 
+  const joinParam = new URLSearchParams(location.search).get('join');
+  const validJoin = joinParam && /^[A-Z0-9]{4}$/i.test(joinParam) ? joinParam.toUpperCase() : null;
+
   // Check if we had a hub session
   state.isHub = localStorage.getItem('yt_is_hub') === 'true';
 
@@ -73,6 +76,14 @@ async function init() {
     if (!ok) { clearSession(); showView('home'); }
   } else {
     showView('home');
+  }
+
+  if (validJoin && state.currentView === 'home') {
+    setTimeout(() => {
+      document.querySelector('[data-action="show-join"]')?.click();
+      const input = document.getElementById('join-code');
+      if (input) input.value = validJoin;
+    }, 50);
   }
 
   // Poll every 2s as a reliable fallback
@@ -561,6 +572,15 @@ function render() {
   temp.innerHTML = html;
   window.morphdom(app, temp, { childrenOnly: true });
   updateBadge();
+
+  if (state.isHub && state.currentView === 'lobby') {
+    const canvas = document.getElementById('hub-qr');
+    if (canvas && canvas.dataset.code !== state.roomCode && window.QRious) {
+      const url = `${location.origin}${location.pathname}?join=${state.roomCode}`;
+      new window.QRious({ element: canvas, value: url, size: 180, padding: 8, background: 'white', foreground: 'black' });
+      canvas.dataset.code = state.roomCode;
+    }
+  }
 }
 
 function updateBadge() {
@@ -992,11 +1012,16 @@ function toast(message, type = 'info') {
 // EVENT DELEGATION
 // ============================================================
 function setupEventListeners() {
+  const tap = () => { try { navigator.vibrate?.(10); } catch {} };
+  const VIBRATE_ACTIONS = new Set(['select-video','cast-vote','reroll','enter-replace','replace-char','enter-swap','swap-char','toggle-ready','finish-turn','stop-and-next']);
+
   document.getElementById('app').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
     const value = btn.dataset.value;
+
+    if (VIBRATE_ACTIONS.has(action)) tap();
 
     switch (action) {
       case 'show-create':

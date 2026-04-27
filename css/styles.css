@@ -1198,17 +1198,24 @@ input[type="text"]:focus { border-color: var(--red); }
   color: var(--text-muted);
   margin-top: 24px;
 }
+.hub-qr-canvas {
+  display: block;
+  margin: 16px auto;
+  background: white;
+  padding: 8px;
+  border-radius: 8px;
+}
 
 /* --- Hub Thumbnail Grid --- */
 .hub-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  grid-template-rows: repeat(4, 1fr);
   gap: 6px;
-  height: 100%;
   max-width: 100%;
-  aspect-ratio: 20 / 9;
+  max-height: 100%;
   margin: 0 auto;
+  border-radius: 12px;
+  box-shadow: 0 0 0 2px var(--active-color, transparent), 0 0 32px 4px color-mix(in srgb, var(--active-color, transparent) 30%, transparent);
 }
 .hub-thumb {
   position: relative;
@@ -1218,6 +1225,7 @@ input[type="text"]:focus { border-color: var(--red); }
   background: var(--surface);
   display: flex;
   flex-direction: column;
+  aspect-ratio: 16 / 9;
 }
 .hub-thumb-empty {
   display: flex;

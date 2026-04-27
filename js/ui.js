@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=14';
+import { formatDuration } from './hub.js?v=15';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -483,6 +483,7 @@ export function renderHubLobby(state) {
         <div class="hub-lobby-content">
           <h1 class="hub-title">YouTube Roulette</h1>
           <div class="hub-room-code-large">${state.roomCode}</div>
+          <canvas id="hub-qr" class="hub-qr-canvas"></canvas>
           <p class="hub-subtitle">Join on your phone with this code!</p>
           <div class="hub-player-list">
             <h2>PLAYERS (${playerCount})</h2>
@@ -592,6 +593,8 @@ export function renderHubGame(state) {
   }
 
   // Selecting — show thumbnail grid
+  const cellCount = Math.max(results.length, 1);
+  const cols = results.length <= 4 ? 2 : results.length <= 6 ? 3 : results.length <= 12 ? 4 : 5;
   return `
     <div class="hub-layout">
       <div class="hub-top-bar">
@@ -609,13 +612,11 @@ export function renderHubGame(state) {
           </div>
         </div>
       </div>
-      <div class="hub-main">
-        <div class="hub-grid">
-          ${Array.from({length: 20}, (_, i) => {
+      <div class="hub-main" style="--active-color:${getPlayerColor(activePlayerId || '')}">
+        <div class="hub-grid" style="grid-template-columns:repeat(${cols}, 1fr)">
+          ${Array.from({length: cellCount}, (_, i) => {
             const video = results[i];
-            if (!video) {
-              return `<div class="hub-thumb hub-thumb-empty"><span class="hub-thumb-num">${i + 1}</span></div>`;
-            }
+            if (!video) return '';
             const thumb = video.type === 'playlist' ? (video.firstVideoThumbnail || video.thumbnail) : video.thumbnail;
             const duration = video.type === 'video' ? formatDuration(video.durationSeconds) : '';
             const badge = video.type === 'playlist' ? '<span class="hub-badge-playlist">PLAYLIST</span>' : '';
