@@ -1222,6 +1222,11 @@ input[type="text"]:focus { border-color: var(--red); }
   border-radius: 12px;
   box-shadow: 0 0 0 2px var(--active-color, transparent), 0 0 32px 4px color-mix(in srgb, var(--active-color, transparent) 30%, transparent);
   /* aspect-ratio set inline per render so 1fr×1fr cells stay 16:9 while the grid fills available space */
+  animation: hubGridFadeIn 0.45s cubic-bezier(0.2, 0, 0.2, 1) both;
+}
+@keyframes hubGridFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
 }
 .hub-thumb {
   position: relative;
@@ -1231,6 +1236,17 @@ input[type="text"]:focus { border-color: var(--red); }
   background: var(--surface);
   display: flex;
   flex-direction: column;
+  animation: hubThumbFadeIn 0.4s cubic-bezier(0.2, 0, 0.2, 1) both;
+}
+.hub-thumb:nth-child(1) { animation-delay: 0.05s; }
+.hub-thumb:nth-child(2) { animation-delay: 0.10s; }
+.hub-thumb:nth-child(3) { animation-delay: 0.15s; }
+.hub-thumb:nth-child(4) { animation-delay: 0.20s; }
+.hub-thumb:nth-child(5) { animation-delay: 0.25s; }
+.hub-thumb:nth-child(n+6) { animation-delay: 0.30s; }
+@keyframes hubThumbFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .hub-thumb-empty {
   display: flex;
@@ -1350,12 +1366,9 @@ input[type="text"]:focus { border-color: var(--red); }
   font-weight: 900;
   font-size: 2.5rem;
   color: var(--gold);
-  animation: charReveal 0.45s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
-.hub-char:nth-child(1) { animation-delay: 0s; }
-.hub-char:nth-child(2) { animation-delay: 0.1s; }
-.hub-char:nth-child(3) { animation-delay: 0.2s; }
-.hub-char:nth-child(4) { animation-delay: 0.3s; }
+/* No charReveal entrance animation on hub-char — the slot-machine spin IS the entrance.
+   Char cells appear instantly, slot machine spins them, hubCharLock pops on lock. */
 
 .hub-char--rolling {
   color: rgba(255, 215, 0, 0.7);
