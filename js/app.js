@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=11';
-import * as Hub from './hub.js?v=11';
+import * as UI from './ui.js?v=12';
+import * as Hub from './hub.js?v=12';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -93,7 +93,14 @@ async function init() {
       } else {
         debouncedRender();
       }
-      // Note: hub auto-start is handled only in handlePlayerChange to prevent race conditions
+
+      // Hub auto-start safety net: handles the case where the Hub refreshed
+      // while all players were already ready (no realtime event arrives to trigger handlePlayerChange).
+      // Safe with concurrent realtime path because startGame has its own isProcessing guard.
+      if (state.isHub && state.room?.status === 'lobby'
+          && state.players.length >= 2 && state.players.every(p => p.ready)) {
+        await startGame();
+      }
     } catch { /* ignore */ }
   }, 2000);
 }
@@ -115,6 +122,7 @@ function clearSession() {
   state.swapMode = false;
   state.swapFirstIndex = null;
   state.isSearching = false;
+  state.isProcessing = false;
   if (state.channel) {
     db.removeChannel(state.channel);
     state.channel = null;
@@ -344,20 +352,20 @@ async function handlePlayerChange(payload) {
   }
 
   // Host/Hub auto-tally: when all players have voted
-  if (isHost() && state.room?.status === 'voting' && !state.isProcessing) {
+  // (tallyAndAdvance manages its own isProcessing guard)
+  if (isHost() && state.room?.status === 'voting') {
     const orderSet = new Set(state.room.player_order || []);
     const votingPlayers = state.players.filter(p => orderSet.has(p.id));
     const allVoted = votingPlayers.every(p => p.vote_for);
     if (allVoted && votingPlayers.length > 0) {
-      state.isProcessing = true;
       await tallyAndAdvance();
     }
   }
 
   // Hub auto-start: when all players ready
-  if (state.isHub && state.room?.status === 'lobby' && !state.isProcessing) {
+  // (startGame manages its own isProcessing guard)
+  if (state.isHub && state.room?.status === 'lobby') {
     if (state.players.length >= 2 && state.players.every(p => p.ready)) {
-      state.isProcessing = true;
       await startGame();
     }
   }
@@ -403,13 +411,13 @@ async function triggerSearch() {
   if (!state.isHub || state.isSearching) return;
   state.isSearching = true;
 
+  const term = state.room.current_search_term;
+
   await db.from('yt_rooms').update({ playback_status: 'searching' })
     .eq('code', state.roomCode);
   debouncedRender();
 
   try {
-    const term = state.room.current_search_term;
-
     // Call Edge Function
     const { data, error } = await db.functions.invoke('youtube-search', {
       body: { term, videoOnly: false },
@@ -419,7 +427,6 @@ async function triggerSearch() {
       toast('YouTube search failed. Try re-searching.', 'error');
       await db.from('yt_rooms').update({ playback_status: 'idle' })
         .eq('code', state.roomCode);
-      state.isSearching = false;
       return;
     }
 
@@ -452,9 +459,15 @@ async function triggerSearch() {
   } catch (err) {
     console.error('Search error:', err);
     toast('Search failed.', 'error');
+  } finally {
+    state.isSearching = false;
+    // If the term changed during the in-flight search (rapid superpower chain),
+    // schedule a follow-up so we don't wait on the 2s poll fallback.
+    const currentTerm = state.room?.current_search_term;
+    if (state.isHub && currentTerm && currentTerm !== term && state.room?.status !== 'gameover') {
+      Promise.resolve().then(() => triggerSearch());
+    }
   }
-
-  state.isSearching = false;
 }
 
 // ============================================================
@@ -491,10 +504,9 @@ function showView(name) {
       if (countdown <= 0) {
         clearInterval(state._autoAdvanceTimer);
         state._autoAdvanceTimer = null;
-        if (state.currentView === 'results' && !state.isProcessing) {
-          state.isProcessing = true;
+        // nextRound manages its own isProcessing guard
+        if (state.currentView === 'results') {
           await nextRound();
-          state.isProcessing = false;
         }
       }
     }, 1000);
@@ -590,21 +602,25 @@ function shuffle(arr) {
 async function startGame() {
   if (!isHost() || state.isProcessing) return;
   state.isProcessing = true;
-  const order = shuffle(state.players.map(p => p.id));
-  const term = generateSearchTerm();
+  try {
+    const order = shuffle(state.players.map(p => p.id));
+    const term = generateSearchTerm();
 
-  await db.from('yt_players').update({
-    ready: false, score: 0,
-    has_reroll: true, has_replace: true, has_swap: true,
-    selected_video: null, vote_for: null,
-    picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
-  }).eq('room_code', state.roomCode);
+    await db.from('yt_players').update({
+      ready: false, score: 0,
+      has_reroll: true, has_replace: true, has_swap: true,
+      selected_video: null, vote_for: null,
+      picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
+    }).eq('room_code', state.roomCode);
 
-  await db.from('yt_rooms').update({
-    status: 'playing', player_order: order, current_player_index: 0,
-    current_search_term: term, round: 1, past_terms: [],
-    search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
-  }).eq('code', state.roomCode);
+    await db.from('yt_rooms').update({
+      status: 'playing', player_order: order, current_player_index: 0,
+      current_search_term: term, round: 1, past_terms: [],
+      search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
+    }).eq('code', state.roomCode);
+  } finally {
+    state.isProcessing = false;
+  }
 }
 
 async function toggleReady() {
@@ -693,11 +709,27 @@ async function selectVideo(index) {
   }).eq('id', state.playerId).eq('room_code', state.roomCode);
 
   // Store video ID directly on room — avoids stale index lookups
-  await db.from('yt_rooms').update({
-    selected_video_index: index,
-    selected_video_id: videoId,
-    playback_status: 'playing',
-  }).eq('code', state.roomCode);
+  try {
+    const { error } = await db.from('yt_rooms').update({
+      selected_video_index: index,
+      selected_video_id: videoId,
+      playback_status: 'playing',
+    }).eq('code', state.roomCode);
+    if (error) throw error;
+  } catch (err) {
+    console.error('selectVideo room update failed:', err);
+    toast('Failed to start playback. Try again.', 'error');
+    // Roll back the player's picked_video_* fields so the pick can be retried
+    try {
+      await db.from('yt_players').update({
+        picked_video_id: null,
+        picked_video_title: null,
+        picked_video_thumbnail: null,
+      }).eq('id', state.playerId).eq('room_code', state.roomCode);
+    } catch (rollbackErr) {
+      console.error('selectVideo rollback failed:', rollbackErr);
+    }
+  }
 }
 
 async function stopPlayback() {
@@ -743,58 +775,69 @@ async function castVote(forPlayerId) {
 }
 
 async function tallyAndAdvance() {
-  const { data: freshPlayers } = await db.from('yt_players').select().eq('room_code', state.roomCode);
-  state.players = freshPlayers || [];
+  if (state.isProcessing) return;
+  state.isProcessing = true;
+  try {
+    const { data: freshPlayers } = await db.from('yt_players').select().eq('room_code', state.roomCode);
+    state.players = freshPlayers || [];
 
-  const { winnerId, isUnanimous } = UI.tallyVotes(state);
+    const { winnerId, isUnanimous } = UI.tallyVotes(state);
 
-  if (winnerId) {
-    const winner = state.players.find(p => p.id === winnerId);
-    if (winner) {
-      const points = (isUnanimous && state.players.length >= 3) ? 2 : 1;
-      const newScore = (winner.score || 0) + points;
-      await db.from('yt_players').update({ score: newScore })
-        .eq('id', winnerId).eq('room_code', state.roomCode);
+    if (winnerId) {
+      const winner = state.players.find(p => p.id === winnerId);
+      if (winner) {
+        const points = (isUnanimous && state.players.length >= 3) ? 2 : 1;
+        const newScore = (winner.score || 0) + points;
+        await db.from('yt_players').update({ score: newScore })
+          .eq('id', winnerId).eq('room_code', state.roomCode);
+      }
     }
+
+    await new Promise(r => setTimeout(r, 300));
+
+    const { data: updated } = await db.from('yt_players').select().eq('room_code', state.roomCode);
+    state.players = updated || [];
+
+    const winScore = state.room.win_score || DEFAULT_WIN_SCORE;
+    const gameWinner = state.players.find(p => (p.score || 0) >= winScore);
+    await db.from('yt_rooms').update({ status: gameWinner ? 'gameover' : 'results' })
+      .eq('code', state.roomCode);
+  } finally {
+    state.isProcessing = false;
   }
-
-  await new Promise(r => setTimeout(r, 300));
-
-  const { data: updated } = await db.from('yt_players').select().eq('room_code', state.roomCode);
-  state.players = updated || [];
-
-  const winScore = state.room.win_score || DEFAULT_WIN_SCORE;
-  const gameWinner = state.players.find(p => (p.score || 0) >= winScore);
-  await db.from('yt_rooms').update({ status: gameWinner ? 'gameover' : 'results' })
-    .eq('code', state.roomCode);
 }
 
 // --- Round management ---
 
 async function nextRound() {
-  if (!isHost()) return;
-  const nextRnd = (state.room.round || 1) + 1;
-  const term = generateSearchTerm();
+  if (!isHost() || state.isProcessing) return;
+  state.isProcessing = true;
+  try {
+    const nextRnd = (state.room.round || 1) + 1;
+    const term = generateSearchTerm();
 
-  const { data: currentPlayers } = await db.from('yt_players').select().eq('room_code', state.roomCode);
-  const currentIds = new Set((currentPlayers || []).map(p => p.id));
+    const { data: currentPlayers } = await db.from('yt_players').select().eq('room_code', state.roomCode);
+    const currentIds = new Set((currentPlayers || []).map(p => p.id));
 
-  const oldOrder = state.room.player_order || [];
-  const rotated = [...oldOrder.slice(1), oldOrder[0]];
-  const cleanOrder = rotated.filter(id => currentIds.has(id));
-  const newPlayers = (currentPlayers || []).filter(p => !cleanOrder.includes(p.id)).map(p => p.id);
-  const finalOrder = [...cleanOrder, ...newPlayers];
+    const oldOrder = state.room.player_order || [];
+    const rotated = [...oldOrder.slice(1), oldOrder[0]];
+    const cleanOrder = rotated.filter(id => currentIds.has(id));
+    const newPlayers = (currentPlayers || []).filter(p => !cleanOrder.includes(p.id)).map(p => p.id);
+    const finalOrder = [...cleanOrder, ...newPlayers];
 
-  await db.from('yt_players').update({
-    selected_video: null, vote_for: null,
-    picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
-  }).eq('room_code', state.roomCode);
+    await db.from('yt_players').update({
+      selected_video: null, vote_for: null,
+      picked_video_id: null, picked_video_title: null, picked_video_thumbnail: null,
+    }).eq('room_code', state.roomCode);
 
-  await db.from('yt_rooms').update({
-    status: 'playing', round: nextRnd, current_player_index: 0,
-    current_search_term: term, player_order: finalOrder,
-    search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
-  }).eq('code', state.roomCode);
+    await db.from('yt_rooms').update({
+      status: 'playing', round: nextRnd, current_player_index: 0,
+      current_search_term: term, player_order: finalOrder,
+      search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
+    }).eq('code', state.roomCode);
+  } finally {
+    state.isProcessing = false;
+  }
 }
 
 async function playAgain() {
@@ -908,7 +951,7 @@ async function reSearch() {
 // Hub admin: force end voting
 async function forceEndVoting() {
   if (!isHost() || state.room?.status !== 'voting') return;
-  state.isProcessing = true;
+  // tallyAndAdvance manages its own isProcessing guard
   await tallyAndAdvance();
 }
 
