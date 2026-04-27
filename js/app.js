@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=27';
-import * as Hub from './hub.js?v=27';
+import * as UI from './ui.js?v=28';
+import * as Hub from './hub.js?v=28';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -126,7 +126,7 @@ function setOverlay(html) {
 function clearOverlay() {
   const el = document.getElementById('hub-overlay');
   if (!el) return;
-  el.classList.remove('is-active');
+  el.classList.remove('is-active', 'is-pulsing', 'tick-flash', 'hub-overlay--go-flash');
   el.innerHTML = '';
 }
 
@@ -171,19 +171,44 @@ async function runCountdown() {
     return;
   }
 
-  const tick = (text, modifier) => {
-    if (!state._showingCountdown) return;
-    const cls = modifier ? `hub-countdown-num ${modifier}` : 'hub-countdown-num';
-    setOverlay(`<div class="${cls}">${text}</div>`);
+  const overlayEl = document.getElementById('hub-overlay');
+  if (overlayEl) overlayEl.classList.add('is-pulsing');
+
+  const tickFlash = () => {
+    if (!overlayEl) return;
+    overlayEl.classList.add('tick-flash');
+    setTimeout(() => overlayEl.classList.remove('tick-flash'), 180);
   };
 
-  tick('3');
+  const tickNum = (text, modifier) => {
+    if (!state._showingCountdown) return;
+    setOverlay(`<div class="hub-countdown-num ${modifier}">${text}</div>`);
+    tickFlash();
+  };
+
+  tickNum('3', 'hub-countdown-num--three');
   scheduleCountdown(() => {
-    tick('2');
+    tickNum('2', 'hub-countdown-num--two');
     scheduleCountdown(() => {
-      tick('1');
+      tickNum('1', 'hub-countdown-num--one');
       scheduleCountdown(() => {
-        tick('GO!', 'hub-countdown-num--go');
+        if (!state._showingCountdown) return;
+        // Stop pulse, swap to GO! tint, write the layered GO! structure.
+        if (overlayEl) {
+          overlayEl.classList.remove('is-pulsing', 'tick-flash');
+          overlayEl.classList.add('hub-overlay--go-flash');
+          setTimeout(() => overlayEl.classList.remove('hub-overlay--go-flash'), 300);
+        }
+        setOverlay(
+          `<div class="hub-go">
+             <div class="hub-go__flash"></div>
+             <div class="hub-go__shake">
+               <div class="hub-go__ring hub-go__ring--inner"></div>
+               <div class="hub-go__ring hub-go__ring--outer"></div>
+               <span class="hub-go__text">GO!</span>
+             </div>
+           </div>`
+        );
         scheduleCountdown(async () => {
           if (!state._showingCountdown) return;
           // Claim the curtain BEFORE the DB write so the realtime echo's render
@@ -229,14 +254,20 @@ function runCurtain() {
     return div.innerHTML;
   };
 
+  const sparks = [1,2,3,4,5,6].map(i => `<div class="hub-curtain-spark hub-curtain-spark--${i}"></div>`).join('');
   setOverlay(
-    `<div class="hub-curtain">
-       <span class="hub-curtain-label">First up:</span>
-       <span class="hub-curtain-name" style="color:${color}">${escName(name)}</span>
+    `<div class="hub-curtain" style="--player-color:${color}">
+       <div class="hub-curtain-bar"></div>
+       <div class="hub-curtain-label">FIRST UP</div>
+       <div class="hub-curtain-name">${escName(name)}</div>
+       <div class="hub-curtain-underline">
+         <div class="hub-curtain-underline-shine"></div>
+       </div>
+       <div class="hub-curtain-sparks">${sparks}</div>
      </div>`
   );
 
-  const duration = reducedMotion() ? 600 : 1600;
+  const duration = reducedMotion() ? 600 : 2050;
   state._curtainTimeout = setTimeout(() => {
     state._curtainTimeout = null;
     state._showingCurtain = false;
@@ -269,10 +300,17 @@ function runJoinBanner() {
     div.textContent = s;
     return div.innerHTML;
   };
+  const sparks = [1,2,3,4,5,6].map(i => `<div class="hub-join-spark hub-join-spark--${i}"></div>`).join('');
   setBanner(
-    `<div class="hub-join-banner" style="border-color:${color}">
-       <div class="hub-join-avatar" style="background:${color}">${avatar}</div>
-       <div class="hub-join-text">${escName(player.name)} joined</div>
+    `<div class="hub-join-banner" style="--player-color:${color}; border-color:${color}">
+       <div class="hub-join-avatar-wrap">
+         <div class="hub-join-avatar" style="background:${color}">${avatar}</div>
+       </div>
+       <div class="hub-join-text">
+         <span class="hub-join-name">${escName(player.name)}</span>
+         <span class="hub-join-verb">joined</span>
+       </div>
+       <div class="hub-join-sparks">${sparks}</div>
      </div>`,
     'hub-banner--join'
   );
@@ -280,7 +318,7 @@ function runJoinBanner() {
     state._joinBannerTimeout = null;
     clearBanner();
     runJoinBanner();
-  }, 2020);
+  }, 2300);
 }
 
 // ============================================================
