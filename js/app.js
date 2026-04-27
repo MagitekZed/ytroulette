@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=12';
-import * as Hub from './hub.js?v=12';
+import * as UI from './ui.js?v=13';
+import * as Hub from './hub.js?v=13';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -527,10 +527,6 @@ function render() {
       case 'results': html = UI.renderHubResults(state); break;
       case 'gameover':html = UI.renderHubGameOver(state); break;
     }
-    // Append confirm-leave overlay if active
-    if (state.confirmLeave && state.currentView !== 'home') {
-      html += UI.renderConfirmLeave();
-    }
   } else {
     // Player rendering
     switch (state.currentView) {
@@ -542,6 +538,11 @@ function render() {
       case 'gameover':html = UI.renderGameOver(state); break;
       case 'host-ended': html = UI.renderHostEnded(); break;
     }
+  }
+
+  // Append confirm-leave overlay if active (shared between hub and phone-host)
+  if (state.confirmLeave && state.currentView !== 'home') {
+    html += UI.renderConfirmLeave();
   }
 
   const temp = document.createElement('div');
@@ -859,8 +860,8 @@ async function playAgain() {
 }
 
 async function leaveGame() {
-  if (state.isHub) {
-    // Hub leaving — confirm first, then delete room
+  if (state.isHub || isHost()) {
+    // Hub or phone-host leaving — confirm first, then delete room
     state.confirmLeave = true;
     render();
     return;
@@ -1004,13 +1005,21 @@ function setupEventListeners() {
         const winScore = parseInt(document.getElementById('create-winscore')?.value) || DEFAULT_WIN_SCORE;
         if (!name) { toast('Enter your name!', 'error'); break; }
         btn.disabled = true;
-        await createRoom(name, winScore);
+        try {
+          await createRoom(name, winScore);
+        } finally {
+          btn.disabled = false;
+        }
         break;
       }
       case 'create-hub': {
         const winScore = parseInt(document.getElementById('hub-winscore')?.value) || DEFAULT_WIN_SCORE;
         btn.disabled = true;
-        await createHubRoom(winScore);
+        try {
+          await createHubRoom(winScore);
+        } finally {
+          btn.disabled = false;
+        }
         break;
       }
       case 'join-game': {
