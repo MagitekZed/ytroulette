@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=31';
-import * as Hub from './hub.js?v=31';
+import * as UI from './ui.js?v=32';
+import * as Hub from './hub.js?v=32';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -1017,7 +1017,7 @@ function render() {
 
 function updateBadge() {
   const badge = document.getElementById('room-code-badge');
-  const hideViews = ['home', 'game', 'voting', 'results', 'gameover'];
+  const hideViews = ['home', 'lobby', 'game', 'voting', 'results', 'gameover'];
   if (state.isHub) {
     // Hub shows badge differently — it's in the layout
     badge.classList.add('hidden');
