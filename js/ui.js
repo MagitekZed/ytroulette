@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=29';
+import { formatDuration } from './hub.js?v=30';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -29,6 +29,7 @@ export function avatarContent(p) {
 export function renderHome() {
   return `
     <div class="home-view anim-fade-in">
+      <div class="home-view-inner">
       <div class="hero">
         <h1 class="title">
           <span class="title-kicker">youtube</span>
@@ -67,6 +68,7 @@ export function renderHome() {
         <input type="text" id="join-name" placeholder="Your name" maxlength="20" autocomplete="off">
         <input type="text" id="join-code" placeholder="Room code" maxlength="4" autocomplete="off" class="code-input">
         <button class="btn btn-primary btn-full" data-action="join-game">Join Room</button>
+      </div>
       </div>
     </div>`;
 }

@@ -274,14 +274,20 @@ input[type="text"]:focus { border-color: var(--red); }
    ============================================================ */
 .home-view {
   flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;
+}
+.home-view-inner {
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   text-align: center;
   gap: 24px;
-  overflow: hidden;
-  padding-top: clamp(24px, 8vh, 64px);
+  padding: 24px 0;
+  box-sizing: border-box;
 }
 
 .hero { margin-bottom: 16px; }
