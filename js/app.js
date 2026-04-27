@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=40';
-import * as Hub from './hub.js?v=40';
+import * as UI from './ui.js?v=41';
+import * as Hub from './hub.js?v=41';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -827,6 +827,11 @@ async function handleRoomChange(payload) {
     const nextId = state.room.player_order?.[state.room.current_player_index];
     const nextPlayer = state.players.find(p => p.id === nextId);
     if (nextPlayer) {
+      // Hide the YT iframe BEFORE setting the banner. The iframe is at
+      // z-index 500, banner at 600 — banner already wins on z-order — but
+      // hiding the iframe synchronously here ensures the first paint after
+      // this realtime echo shows the banner uncovered.
+      if (oldPlayback === 'playing') Hub.stopVideo();
       const color = UI.getPlayerColor(nextId);
       runTurnBanner(nextPlayer, color);
     }

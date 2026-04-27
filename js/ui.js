@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=40';
+import { formatDuration } from './hub.js?v=41';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -773,23 +773,19 @@ export function renderHubVoting(state) {
         <div class="hub-vote-grid">
           ${votingPlayers.map((p, i) => {
             const votes = voteCounts[p.id] || 0;
-            const dimClass = lastVoter && p.vote_for ? ' hub-vote-card--voted-dim' : '';
-            const isHoldout = lastVoter && p.id === lastVoter.id;
-            const playerClass = isHoldout ? ' hub-vote-player--waiting' : '';
-            const stillVotingTag = isHoldout
-              ? `<div class="hub-vote-still-voting">⏳ still voting…</div>`
-              : '';
+            // Cards are NOT linked to voting state — they show video info and
+            // vote count only. The pending strip below the grid is the sole
+            // indicator of who has/hasn't voted.
             const countHtml = revealing
               ? `<div class="hub-vote-count hub-vote-count--reveal">${votes} vote${votes !== 1 ? 's' : ''}</div>`
               : `<div class="hub-vote-count hub-vote-count--hidden">&nbsp;</div>`;
             return `
-              <div class="hub-vote-card${dimClass}">
+              <div class="hub-vote-card">
                 <span class="hub-vote-badge">${i + 1}</span>
                 ${p.picked_video_thumbnail ? `<img src="${esc(p.picked_video_thumbnail)}" class="hub-vote-thumb">` : '<div class="hub-vote-thumb-empty">🎬</div>'}
                 <div class="hub-vote-info">
-                  <div class="hub-vote-player${playerClass}" style="color:${getPlayerColor(p.id)}">${esc(p.name)}</div>
+                  <div class="hub-vote-player" style="color:${getPlayerColor(p.id)}">${esc(p.name)}</div>
                   <div class="hub-vote-title">${esc(p.picked_video_title || 'No video')}</div>
-                  ${stillVotingTag}
                   ${countHtml}
                 </div>
               </div>`;

@@ -3045,10 +3045,13 @@ input[type="text"]:focus { border-color: var(--red); }
   to   { opacity: 1.0;  transform: scale(1.04); }
 }
 
-/* Turn-change banner — top-positioned, 1320ms total */
+/* Turn-change banner — top-positioned, 1320ms total. z-index 600 sits above
+   the YT iframe wrapper (500) so the banner is never visually obscured even
+   if Hub.stopVideo()'s display:none hasn't painted yet. */
 .hub-banner.hub-banner--turn {
   top: 80px;
   bottom: auto;
+  z-index: 600;
 }
 .hub-turn-banner {
   display: flex;
