@@ -347,9 +347,10 @@ async function init() {
       // Hub auto-start safety net: handles the case where the Hub refreshed
       // while all players were already ready (no realtime event arrives to trigger handlePlayerChange).
       // Skip during countdown so the in-flight 3-2-1-GO sequence doesn't get pre-empted.
+      // Routes through runCountdown (matches realtime path) so the countdown isn't bypassed.
       if (state.isHub && state.room?.status === 'lobby' && !state._showingCountdown
           && state.players.length >= 2 && state.players.every(p => p.ready)) {
-        await startGame();
+        runCountdown();
       }
     } catch { /* ignore */ }
   }, 2000);
@@ -630,7 +631,7 @@ async function handlePlayerChange(payload) {
     const idx = state.players.findIndex(p => p.id === payload.new.id);
     if (idx >= 0) state.players[idx] = payload.new;
     else state.players.push(payload.new);
-    if (state._showingCountdown && !state.players.every(p => p.ready)) {
+    if (state._showingCountdown && !state.isProcessing && !state.players.every(p => p.ready)) {
       abortCountdown();
     }
   } else if (payload.eventType === 'DELETE') {
