@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=39';
-import * as Hub from './hub.js?v=39';
+import * as UI from './ui.js?v=40';
+import * as Hub from './hub.js?v=40';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -425,9 +425,20 @@ async function init() {
       await loadRoom(state.roomCode);
 
       if (state.room?.status !== oldStatus) {
+        // Mirror the realtime status-change branch — clear isProcessing and
+        // hide the YT iframe BEFORE showView. Otherwise an end-of-round
+        // transition that arrives via poll (race with realtime) leaves the
+        // iframe pinned over the voting view.
+        state.isProcessing = false;
+        if (state.isHub) Hub.stopVideo();
         showView(viewForStatus(state.room.status));
-      } else if (state.isHub && !state.isSearching && oldTerm !== state.room?.current_search_term) {
-        // Term changed (superpower) — re-search takes priority
+      } else if (state.isHub && !state.isSearching && oldTerm !== state.room?.current_search_term
+                 && !state._showingTurnBanner && !state._showingCurtain && !state._showingCountdown) {
+        // Term changed (superpower / new turn) — re-search takes priority.
+        // Gated on banner/curtain/countdown so the poll can't fire triggerSearch
+        // mid-banner; that would anchor searchStartTime early and shorten the
+        // visible slot reveal. Banner's setTimeout tail is the only post-banner
+        // entry point for triggerSearch.
         await triggerSearch();
       } else if (state.isHub && state.room?.playback_status !== oldPlayback) {
         handleHubPlaybackChange();

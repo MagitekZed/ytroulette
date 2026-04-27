@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=39';
+import { formatDuration } from './hub.js?v=40';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -613,6 +613,22 @@ export function renderHubGame(state) {
       <div class="hub-layout">
         <div class="hub-top-bar">
           <span class="hub-game-info">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns} · ${esc(activePlayer?.name || '???')}'s Pick</span>
+          <span class="hub-room-code">ROOM: ${state.roomCode}</span>
+        </div>
+        <div class="hub-main"></div>
+        ${renderHubAdminBar(state)}
+      </div>`;
+  }
+
+  // Idle — between turns, banner is up. Render an empty main so morphdom
+  // doesn't paint the empty selecting grid (gold-bordered hub-grid) behind
+  // the turn banner. The banner's setTimeout tail flips status to 'searching'
+  // and triggerSearch fires, mounting the slot cells fresh.
+  if (playbackStatus === 'idle' || state._showingTurnBanner) {
+    return `
+      <div class="hub-layout">
+        <div class="hub-top-bar">
+          <span class="hub-game-info">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns}</span>
           <span class="hub-room-code">ROOM: ${state.roomCode}</span>
         </div>
         <div class="hub-main"></div>
