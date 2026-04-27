@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=21';
-import * as Hub from './hub.js?v=21';
+import * as UI from './ui.js?v=22';
+import * as Hub from './hub.js?v=22';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -67,8 +67,12 @@ const SLOT_REVEAL_MIN_MS = SLOT_FIRST_LOCK_MS + (TERM_LENGTH - 1) * SLOT_STAGGER
 const slotIntervals = [];
 
 function startSlotReveal() {
-  stopSlotReveal();
+  // Already running on the current cells — don't restart (would reset the spin).
+  // render() can be called many times during the reveal (debouncedRender on echoes);
+  // each call shouldn't yank back to time 0.
+  if (slotIntervals.length > 0) return;
   const cells = document.querySelectorAll('.hub-char--rolling');
+  if (cells.length === 0) return;
   cells.forEach((cell, i) => {
     const finalChar = cell.dataset.finalChar;
     const lockAt = SLOT_FIRST_LOCK_MS + i * SLOT_STAGGER_MS;
@@ -487,11 +491,21 @@ async function triggerSearch() {
   state.isSearching = true;
 
   const term = state.room.current_search_term;
+
+  // Optimistic local update: render the searching view NOW so the slot reveal
+  // starts at user-visible time T0, without waiting for the DB write + realtime
+  // round-trip echo to come back. (The showView path may have already done this;
+  // skip in that case.)
+  if (state.room && state.room.playback_status !== 'searching') {
+    state.room.playback_status = 'searching';
+    render();
+  }
+  // Anchor the min-time clock to right after the render so the spin animation
+  // has the full SLOT_REVEAL_MIN_MS to play out before the grid replaces it.
   const searchStartTime = performance.now();
 
   await db.from('yt_rooms').update({ playback_status: 'searching' })
     .eq('code', state.roomCode);
-  debouncedRender();
 
   try {
     // Call Edge Function
@@ -569,11 +583,19 @@ function showView(name) {
     state._autoAdvanceTimer = null;
   }
 
+  // Hub entering game view with no search yet: optimistically flip to 'searching'
+  // BEFORE rendering so the slot reveal starts immediately (no empty-grid flash).
+  // The DB write follows shortly via triggerSearch; the realtime echo on the same
+  // value won't trigger a re-render branch.
+  if (state.isHub && name === 'game' && state.room?.playback_status === 'idle') {
+    state.room.playback_status = 'searching';
+  }
+
   state.currentView = name;
   render();
 
   // When hub enters game view, trigger the first search
-  if (state.isHub && name === 'game' && state.room?.playback_status === 'idle') {
+  if (state.isHub && name === 'game' && state.room?.playback_status === 'searching' && !state.isSearching) {
     triggerSearch();
   }
 
