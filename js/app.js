@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=23';
-import * as Hub from './hub.js?v=23';
+import * as UI from './ui.js?v=24';
+import * as Hub from './hub.js?v=24';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -71,8 +71,11 @@ function startSlotReveal() {
   // render() can be called many times during the reveal (debouncedRender on echoes);
   // each call shouldn't yank back to time 0.
   if (slotIntervals.length > 0) return;
-  const cells = document.querySelectorAll('.hub-char--rolling');
+  // Pick up cells that haven't been spun yet (no rolling, no locked classes).
+  // Locked cells are static — they've already played out and should stay put.
+  const cells = document.querySelectorAll('.hub-search-term .hub-char:not(.hub-char--rolling):not(.hub-char--locked)');
   if (cells.length === 0) return;
+  cells.forEach(cell => cell.classList.add('hub-char--rolling'));
   cells.forEach((cell, i) => {
     const finalChar = cell.dataset.finalChar;
     const lockAt = SLOT_FIRST_LOCK_MS + i * SLOT_STAGGER_MS;
@@ -652,7 +655,25 @@ function render() {
 
   const temp = document.createElement('div');
   temp.innerHTML = html;
-  window.morphdom(app, temp, { childrenOnly: true });
+  window.morphdom(app, temp, {
+    childrenOnly: true,
+    onBeforeElUpdated(fromEl, toEl) {
+      // Slot-reveal cells are owned by JS once the reveal starts. Skip morphdom
+      // updates on rolling/locked cells unless the term itself has changed
+      // (different data-final-char). This prevents debouncedRender from yanking
+      // the spin back to time 0 or stripping the locked state mid-hold.
+      if (fromEl.classList && (fromEl.classList.contains('hub-char--rolling') || fromEl.classList.contains('hub-char--locked'))) {
+        if (fromEl.dataset.finalChar !== toEl.dataset?.finalChar) {
+          // New term — let morphdom replace the cell, but stop the old reveal first
+          // so its lingering interval doesn't clobber the new char on its next tick.
+          if (fromEl.classList.contains('hub-char--rolling')) stopSlotReveal();
+          return true;
+        }
+        return false;
+      }
+      return true;
+    },
+  });
   updateBadge();
 
   if (state.isHub && state.currentView === 'lobby') {
@@ -1098,9 +1119,9 @@ async function skipPlayer() {
 // Hub admin: force re-search
 async function reSearch() {
   if (!state.isHub) return;
-  await db.from('yt_rooms').update({
-    playback_status: 'idle', search_results: [], selected_video_index: null, selected_video_id: null,
-  }).eq('code', state.roomCode);
+  // No intermediate 'idle' write — that caused a brief empty-grid flash before
+  // the searching view appeared. triggerSearch's optimistic update flips straight
+  // to 'searching' and the eventual 'selecting' write replaces search_results.
   await triggerSearch();
 }
 

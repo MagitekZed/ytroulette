@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=23';
+import { formatDuration } from './hub.js?v=24';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -595,7 +595,7 @@ export function renderHubGame(state) {
         </div>
         <div class="hub-main">
           <div class="hub-searching">
-            <div class="hub-search-term">${term.split('').map(ch => `<span class="hub-char hub-char--rolling" data-final-char="${esc(ch)}">${esc(ch)}</span>`).join('')}</div>
+            <div class="hub-search-term">${term.split('').map(ch => `<span class="hub-char" data-final-char="${esc(ch)}">${esc(ch)}</span>`).join('')}</div>
             <div class="hub-searching-spinner">🔍 Searching YouTube...</div>
           </div>
         </div>
