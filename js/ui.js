@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=32';
+import { formatDuration } from './hub.js?v=33';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -38,12 +38,13 @@ export function renderHome() {
         <p class="subtitle">Find the weirdest videos. Win the game.</p>
       </div>
       <div class="home-buttons">
-        <button class="btn btn-primary btn-lg btn-full" data-action="show-join">Join Game →</button>
-        <button class="btn btn-secondary btn-lg btn-full" data-action="show-create">Create Game (Phone)</button>
         <div class="home-host-prompt">
-          <p class="home-host-kicker">Are you on a TV or desktop?</p>
+          <span class="home-host-kicker home-host-kicker--mobile">Are you on a TV or desktop?</span>
+          <span class="home-host-kicker home-host-kicker--desktop">RECOMMENDED FOR TV</span>
           <button class="btn-text-host" data-action="show-hub">Host the Hub Display →</button>
         </div>
+        <button class="btn btn-primary btn-lg btn-full" data-action="show-join">Join Game →</button>
+        <button class="btn btn-secondary btn-lg btn-full" data-action="show-create">Create Game (Phone)</button>
       </div>
       <div id="home-hub" class="form-card glass-card hidden">
         <h2>Configure the Hub</h2>
