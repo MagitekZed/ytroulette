@@ -2,6 +2,26 @@
 
 Ideas evaluated and shelved for later. Not rejected outright — just not in the current build queue.
 
+## Skip-vote 60s timer counts ad time on non-Premium accounts
+
+**Source:** Playtest 2026-04-27 (after Batch C ship).
+
+**The pitch:** The thumbs-down skip-vote 60s gate is anchored on the YT IFrame's first `onStateChange === 1` event (PLAYING). That fires when the **ad** starts on accounts without YouTube Premium, not when the actual video starts. Result: a user with a 30-second pre-roll ad can vote-to-skip after only 30s of actual video. The host (developer) has Premium so doesn't see this in their own testing — it's a real bug for everyone else.
+
+**Why deferred:** Non-trivial to fix cleanly. The YT IFrame public API doesn't expose `onAdStart` / `onAdEnd` events. Possible approaches:
+- Listen for additional state transitions (state 3 = BUFFERING) — ad-to-video transitions sometimes show up as buffering, but unreliable.
+- Use `player.getDuration()` — returns the VIDEO duration, but during an ad it returns the ad's duration. So watching for the duration value to change might work as an "ad ended" signal, but YT may not always update this reliably.
+- Use `player.getVideoUrl()` — for ads vs main video the URL differs; could detect change. Has worked in some unofficial implementations but no API guarantee.
+- Add a "Real video started" UI button the active player taps to manually start the gate. Hacky but reliable.
+
+**Rough scope:** M. Mostly research time (validating which detection approach actually works against current YT IFrame behavior) plus the implementation. Likely needs to track `getDuration()` over time and fire the gate-start when the duration value stabilizes after an ad.
+
+**Workaround for now:** the host can use Premium to test (already happening) and the gate is acceptable in practice — even if it counts ad time, players can still meaningfully wait 60s before skip-voting on most non-pre-roll-ad videos.
+
+**Dependencies:** None. Could ship anytime.
+
+---
+
 ## handleHubPlaybackChange 200ms playVideo delay
 
 **Source:** Concurrency hardening audit 2026-04-27.
