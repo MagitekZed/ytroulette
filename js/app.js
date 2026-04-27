@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=36';
-import * as Hub from './hub.js?v=36';
+import * as UI from './ui.js?v=37';
+import * as Hub from './hub.js?v=37';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -482,6 +482,8 @@ function clearSession() {
   state._showingTurnBanner = false;
   if (state._turnBannerTimeout) { clearTimeout(state._turnBannerTimeout); state._turnBannerTimeout = null; }
   state._connStatus = 'ok';
+  const pillHost = document.getElementById('conn-pill-host');
+  if (pillHost) pillHost.innerHTML = '';
   clearOverlay();
   clearBanner();
   if (state.channel) {
@@ -712,6 +714,10 @@ function subscribeToRoom(roomCode) {
       filter: `room_code=eq.${roomCode}`,
     }, handlePlayerChange)
     .subscribe((status) => {
+      // Skip status updates when we've intentionally left the room
+      // (clearSession nulls roomCode). Otherwise CLOSED fires on leave/end-game
+      // and we'd surface a false-alarm "Reconnecting..." pill.
+      if (!state.roomCode) return;
       if (status === 'SUBSCRIBED') setConnStatus('ok');
       else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         setConnStatus('reconnecting');
@@ -1339,8 +1345,10 @@ async function stopPlayback() {
 }
 
 async function stopAndNext() {
-  await db.from('yt_rooms').update({ playback_status: 'stopped' })
-    .eq('code', state.roomCode);
+  // Single write — finishTurn writes playback_status='idle' alongside the new
+  // current_player_index + term, so the Hub gets one realtime echo and the
+  // turn banner fires cleanly. Hub.stopVideo() still triggers via
+  // handleHubPlaybackChange's playback_status-change branch.
   await finishTurn();
 }
 

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=36">
+    <link rel="stylesheet" href="css/styles.css?v=37">
 </head>
 <body>
     <div id="room-code-badge" class="room-badge hidden"></div>
@@ -20,8 +20,9 @@
     <!-- YouTube player lives OUTSIDE #app so morphdom never touches it -->
     <div id="yt-player-wrapper" class="yt-player-wrapper hidden">
         <div id="yt-player"></div>
-        <div id="hub-video-timer" class="hub-video-timer hidden" aria-hidden="true">0:00</div>
     </div>
+    <!-- Hub video timer — outside #app, positioned via CSS to align with admin bar -->
+    <div id="hub-video-timer" class="hub-video-timer hidden" aria-hidden="true">0:00</div>
 
     <!-- Hub overlay (countdown, curtain) and banner (join fanfare) — outside #app, JS-owned lifecycle -->
     <div id="hub-overlay" class="hub-overlay" aria-hidden="true"></div>
@@ -31,6 +32,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/morphdom@2/dist/morphdom-umd.min.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
-    <script type="module" src="js/app.js?v=36"></script>
+    <script type="module" src="js/app.js?v=37"></script>
 </body>
 </html>

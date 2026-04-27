@@ -3074,18 +3074,21 @@ input[type="text"]:focus { border-color: var(--red); }
 
 /* Hub video timer pill — overlays the YT wrapper bottom-right */
 .hub-video-timer {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
-  padding: 6px 12px;
-  background: rgba(0, 0, 0, 0.72);
+  position: fixed;
+  bottom: 18px;
+  left: 75%;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  background: rgba(0, 0, 0, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: #fff;
   font-family: 'Outfit', monospace;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  font-size: 0.95rem;
-  letter-spacing: 0.04em;
-  border-radius: 6px;
-  z-index: 510;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  border-radius: 8px;
+  z-index: 600;
+  pointer-events: none;
 }
 .hub-video-timer.hidden { display: none; }
