@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=24';
-import * as Hub from './hub.js?v=24';
+import * as UI from './ui.js?v=25';
+import * as Hub from './hub.js?v=25';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -686,9 +686,10 @@ function render() {
   }
 
   if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'searching') {
-    if (document.querySelector('.hub-char--rolling')) {
-      startSlotReveal();
-    }
+    // startSlotReveal has its own guards: skips if intervals already running OR
+    // if no fresh cells (.hub-char without --rolling/--locked) exist. The HTML
+    // emits cells without those classes; JS adds --rolling inside startSlotReveal.
+    startSlotReveal();
   } else {
     stopSlotReveal();
   }
