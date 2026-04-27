@@ -43,3 +43,31 @@ Ideas evaluated and shelved for later. Not rejected outright — just not in the
 **Rough scope:** S–M depending on path chosen. The UX-only option (don't auto-advance, just toast) is S. Eager Edge Function paging is M.
 
 **Dependencies:** None.
+
+---
+
+## Remove O/0 (and possibly I/1) From Room Code Generation
+
+**Source:** Phase B playtest 2026-04-26.
+
+**The pitch:** Room codes are randomly generated from `ROOM_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'`. The letter `O` and digit `0` look nearly identical in most fonts; same for `I` and `1`. When dictating codes verbally or reading off a TV at distance, this creates errors. Restrict the alphabet to unambiguous characters.
+
+**Why deferred:** Trivial change but worth bundling with other small polish; doesn't block anything.
+
+**Rough scope:** XS. One-line change in `js/app.js` — replace `ROOM_CHARS` with the filtered set (e.g. `'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'`). Existing rooms with O/0/I/1 codes keep working; only newly-generated codes use the restricted alphabet.
+
+**Dependencies:** None.
+
+---
+
+## Hub Voting Screen — Full Visual Review
+
+**Source:** Phase B playtest 2026-04-26.
+
+**The pitch:** The Hub voting screen feels under-designed compared to the rest of the game. The current layout uses the available space inefficiently (most of the screen is empty), the player vote-status indicators (now bigger Jackbox-style cards but still room to grow) could be more dramatic/animated, and the overall presentation could feel more like a "moment." A focused visual pass — Jackbox-style, with bold typography, larger/more cinematic vote cards, animated transitions between voted/pending states, and a more deliberate use of the screen real estate.
+
+**Why deferred:** The functional bones are now in place (blind voting, numbered grid, last-voter spotlight, bigger pending cards). A full visual review is design-driven and best done as a focused effort rather than tacked onto each functional change.
+
+**Rough scope:** M. Touches `renderHubVoting`, several CSS rules, possibly new keyframe animations. May benefit from a design exploration / mockup phase before code.
+
+**Dependencies:** None — but worth doing alongside or after Phase C's slot-machine reveal so the cinematic style is consistent.

@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=17';
+import { formatDuration } from './hub.js?v=18';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -349,6 +349,19 @@ export function renderVoting(state) {
     : -1;
   const myVoteSlot = myVoteSlotIdx >= 0 ? voteSlots[myVoteSlotIdx] : null;
 
+  const pendingStripHtml = `
+    <div class="voting-pending-strip">
+      ${voteTargets.map(p => {
+        const voted = !!p.vote_for;
+        return `
+          <div class="voting-pending-pill ${voted ? 'voting-pending-pill--voted' : ''}">
+            <span class="voting-pending-avatar" style="background:${voted ? getPlayerColor(p.id) : 'var(--surface)'};color:${voted ? 'white' : 'var(--text-dim)'}">${esc(p.name[0].toUpperCase())}</span>
+            <span class="voting-pending-name">${esc(p.name)}</span>
+            <span class="voting-pending-check">${voted ? '✓' : '⋯'}</span>
+          </div>`;
+      }).join('')}
+    </div>`;
+
   return `
     <div class="voting-view anim-fade-in">
       <div class="voting-header">
@@ -367,6 +380,7 @@ export function renderVoting(state) {
             </div>
             <div style="color:var(--teal);font-weight:600;font-size:0.85rem">✓ Your Vote</div>
           </div>
+          ${pendingStripHtml}
           <p class="waiting-text">Waiting for other players to vote...</p>
         ` : `
           <div class="vote-legend">
@@ -385,6 +399,7 @@ export function renderVoting(state) {
               return '<button class="num-cell num-cell-empty" disabled></button>';
             }).join('')}
           </div>
+          ${pendingStripHtml}
         `}
       </div>
       <button class="btn btn-text" data-action="leave-game">Leave Game</button>
@@ -712,7 +727,14 @@ export function renderHubVoting(state) {
           <div class="hub-vote-pending-strip">
             ${votingPlayers.map(p => {
               const voted = !!p.vote_for;
-              return `<div class="player-avatar hub-vote-pending-avatar ${voted ? '' : 'hub-vote-pending-avatar--pending'}" style="background:${voted ? getPlayerColor(p.id) : 'var(--surface)'}">${esc(p.name[0].toUpperCase())}</div>`;
+              return `
+                <div class="hub-vote-pending-card ${voted ? 'hub-vote-pending-card--voted' : ''}">
+                  <div class="hub-vote-pending-avatar" style="background:${voted ? getPlayerColor(p.id) : 'var(--surface)'};color:${voted ? 'white' : 'var(--text-dim)'}">${esc(p.name[0].toUpperCase())}</div>
+                  <div class="hub-vote-pending-info">
+                    <div class="hub-vote-pending-name" style="color:${voted ? getPlayerColor(p.id) : 'var(--text-muted)'}">${esc(p.name)}</div>
+                    <div class="hub-vote-pending-status">${voted ? '✓ Voted' : '⋯ Waiting'}</div>
+                  </div>
+                </div>`;
             }).join('')}
           </div>`}
       </div>

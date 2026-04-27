@@ -796,6 +796,7 @@ input[type="text"]:focus { border-color: var(--red); }
 }
 .voting-header {
   text-align: center;
+  padding: 0 88px;
 }
 .voting-header h1 {
   font-family: var(--font-heading);
@@ -1425,20 +1426,60 @@ input[type="text"]:focus { border-color: var(--red); }
 .hub-vote-pending-strip {
   display: flex;
   flex-direction: row;
-  gap: 8px;
+  gap: 16px;
   justify-content: center;
-  margin-top: 12px;
+  margin-top: 24px;
   flex-wrap: wrap;
+  width: 100%;
+}
+.hub-vote-pending-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  min-width: 180px;
+  transition: all 0.3s ease;
+}
+.hub-vote-pending-card--voted {
+  background: rgba(78, 205, 196, 0.08);
+  border-color: rgba(78, 205, 196, 0.3);
 }
 .hub-vote-pending-avatar {
-  width: 28px;
-  height: 28px;
-  font-size: 0.75rem;
-}
-.hub-vote-pending-avatar--pending {
-  opacity: 0.3;
-  color: var(--text-dim);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.1rem;
+  flex-shrink: 0;
   border: 1px solid var(--border);
+}
+.hub-vote-pending-card--voted .hub-vote-pending-avatar {
+  border-color: transparent;
+}
+.hub-vote-pending-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hub-vote-pending-name {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1rem;
+}
+.hub-vote-pending-status {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.hub-vote-pending-card--voted .hub-vote-pending-status {
+  color: var(--teal);
+  font-weight: 600;
 }
 .hub-vote-thumb {
   width: 120px;
@@ -1580,7 +1621,6 @@ input[type="text"]:focus { border-color: var(--red); }
   background: var(--surface-hover);
   border-color: var(--gold);
   color: var(--gold);
-  transform: scale(1.05);
 }
 .num-cell:active:not(.num-cell-empty) {
   transform: scale(0.95);
@@ -1598,6 +1638,61 @@ input[type="text"]:focus { border-color: var(--red); }
 .num-cell-none:hover:not(.num-cell-empty) {
   border-color: #FF6B6B;
   color: #FF6B6B;
+}
+
+/* Phone pending strip — shows who has/hasn't voted */
+.voting-pending-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.voting-pending-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: all 0.3s ease;
+}
+.voting-pending-pill--voted {
+  background: rgba(78, 205, 196, 0.08);
+  border-color: rgba(78, 205, 196, 0.3);
+}
+.voting-pending-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.voting-pending-pill--voted .voting-pending-avatar {
+  border-color: transparent;
+}
+.voting-pending-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.voting-pending-pill:not(.voting-pending-pill--voted) .voting-pending-name {
+  color: var(--text-muted);
+}
+.voting-pending-check {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.voting-pending-pill--voted .voting-pending-check {
+  color: var(--teal);
 }
 
 /* Vote legend (phone voting number→name map) */
