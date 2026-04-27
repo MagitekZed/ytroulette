@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=28';
+import { formatDuration } from './hub.js?v=29';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -30,7 +30,10 @@ export function renderHome() {
   return `
     <div class="home-view anim-fade-in">
       <div class="hero">
-        <h1 class="title">YouTube<br><span class="title-accent">Roulette</span></h1>
+        <h1 class="title">
+          <span class="title-kicker">youtube</span>
+          <span class="title-accent">Roulette</span>
+        </h1>
         <p class="subtitle">Find the weirdest videos. Win the game.</p>
       </div>
       <div class="home-buttons">
@@ -39,7 +42,7 @@ export function renderHome() {
         <button class="btn btn-secondary btn-lg btn-full" data-action="show-join">Join Game</button>
       </div>
       <div id="home-hub" class="form-card glass-card hidden">
-        <h2>Host Hub Display</h2>
+        <h2>Configure the Hub</h2>
         <p style="color:var(--text-muted);font-size:0.85rem">This screen shows the game. Players join on their phones.</p>
         <div style="display:flex;align-items:center;gap:10px">
           <label for="hub-winscore" style="color:var(--text-muted);font-size:0.85rem;white-space:nowrap">Points to win:</label>
@@ -49,7 +52,7 @@ export function renderHome() {
         <button class="btn btn-gold btn-full" data-action="create-hub">Create Hub</button>
       </div>
       <div id="home-create" class="form-card glass-card hidden">
-        <h2>Create Game</h2>
+        <h2>Set up your room</h2>
         <input type="text" id="create-name" placeholder="Your name" maxlength="20" autocomplete="off">
         <div style="display:flex;align-items:center;gap:10px">
           <label for="create-winscore" style="color:var(--text-muted);font-size:0.85rem;white-space:nowrap">Points to win:</label>
@@ -59,7 +62,8 @@ export function renderHome() {
         <button class="btn btn-primary btn-full" data-action="create-game">Create Room</button>
       </div>
       <div id="home-join" class="form-card glass-card hidden">
-        <h2>Join Game</h2>
+        <h2>Enter the room code</h2>
+        <p style="color:var(--text-muted);font-size:0.8rem;margin:-4px 0 0 0">Get it from the Hub display.</p>
         <input type="text" id="join-name" placeholder="Your name" maxlength="20" autocomplete="off">
         <input type="text" id="join-code" placeholder="Room code" maxlength="4" autocomplete="off" class="code-input">
         <button class="btn btn-primary btn-full" data-action="join-game">Join Room</button>
@@ -133,11 +137,12 @@ export function renderGame(state) {
 
   const header = `
     <div class="game-header">
+      ${state.roomCode && !state.isHub ? `<div class="game-header-roomcode">${state.roomCode}</div>` : ''}
       <div class="game-round">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns} · FIRST TO ${winScore}</div>
       <div class="game-turn-info">${isMyTurn ? 'Your Turn!' : `${esc(activePlayer?.name || '???')}'s Turn`}</div>
       <div class="mini-scores">
         ${getSortedPlayers(state).map(p => `
-          <span class="mini-score ${p.id === activePlayerId ? 'active-player' : ''}">${esc(p.name)}: ${p.score || 0} pts</span>
+          <span class="mini-score ${p.id === activePlayerId ? 'active-player' : ''}" style="--mini-color:${getPlayerColor(p.id)}${p.id === activePlayerId ? `;color:${getPlayerColor(p.id)}` : ''}">${esc(p.name)}: ${p.score || 0} pts</span>
         `).join('')}
       </div>
     </div>`;
@@ -183,7 +188,7 @@ export function renderGame(state) {
     }
     return `<div class="game-view anim-fade-in">${header}<div class="scrollable-content">${termSection}${renderMyControls(state)}</div>${leaveBtn}</div>`;
   } else {
-    return `<div class="game-view anim-fade-in">${header}<div class="scrollable-content">${termSection}${renderWaitingMessage(activePlayer)}</div>${leaveBtn}</div>`;
+    return `<div class="game-view anim-fade-in">${header}<div class="scrollable-content">${termSection}${renderWaitingMessage(activePlayer, playbackStatus)}</div>${leaveBtn}</div>`;
   }
 }
 
@@ -227,7 +232,17 @@ function renderPlayerHubControls(state, playbackStatus) {
   }
 
   if (playbackStatus === 'searching') {
-    return '<div class="waiting-view"><div class="waiting-spinner">🔍</div><div class="waiting-subtitle">Searching YouTube...</div></div>';
+    const myColor = me ? getPlayerColor(me.id) : 'var(--text-muted)';
+    return `
+      <div class="waiting-display">
+        <div class="waiting-pips">
+          <span class="waiting-pip" style="background:${myColor}"></span>
+          <span class="waiting-pip" style="background:${myColor}"></span>
+          <span class="waiting-pip" style="background:${myColor}"></span>
+        </div>
+        <div class="waiting-message">Searching YouTube...</div>
+        <div class="waiting-status">🔍 Pulling results to the Hub</div>
+      </div>`;
   }
 
   // Replace input mode
@@ -302,11 +317,24 @@ function renderMyControls(state) {
     </button>`;
 }
 
-function renderWaitingMessage(activePlayer) {
+function renderWaitingMessage(activePlayer, playbackStatus) {
+  const color = activePlayer ? getPlayerColor(activePlayer.id) : 'var(--text-muted)';
+  const status =
+    playbackStatus === 'searching' ? '🔍 Searching YouTube...' :
+    playbackStatus === 'idle' ? 'Picking a video...' :
+    playbackStatus === 'playing' ? '🎬 Watching their pick...' :
+    playbackStatus === 'stopped' ? 'Wrapping up...' : '';
   return `
-    <div class="waiting-view">
-      <div class="waiting-spinner">🔍</div>
-      <div class="waiting-subtitle">Waiting for <strong>${esc(activePlayer?.name || '???')}</strong> to finish...</div>
+    <div class="waiting-display">
+      <div class="waiting-pips">
+        <span class="waiting-pip" style="background:${color}"></span>
+        <span class="waiting-pip" style="background:${color}"></span>
+        <span class="waiting-pip" style="background:${color}"></span>
+      </div>
+      <div class="waiting-message">
+        Waiting for <strong style="color:${color}">${esc(activePlayer?.name || '???')}</strong> to finish...
+      </div>
+      <div class="waiting-status">${status}</div>
     </div>`;
 }
 
@@ -330,9 +358,17 @@ export function renderVoting(state) {
     return `
       <div class="voting-view anim-fade-in">
         <div class="voting-header">
+          ${state.roomCode && !state.isHub ? `<div class="game-header-roomcode">${state.roomCode}</div>` : ''}
           <h1>Voting in Progress</h1>
           <p class="voting-subtitle">You joined mid-round — you'll play next round.</p>
-          <div class="vote-progress">${votedCount}/${totalPlayers} votes in</div>
+          <div class="vote-progress">
+            <div class="vote-progress-pips">
+              ${Array.from({length: totalPlayers}, (_, i) =>
+                `<div class="vote-progress-pip${i < votedCount ? ' filled' : ''}"></div>`
+              ).join('')}
+            </div>
+            <span class="vote-progress-label">${votedCount} of ${totalPlayers} voted</span>
+          </div>
         </div>
         <div class="scrollable-content">
           ${voteTargets.map(p => `
@@ -385,9 +421,17 @@ export function renderVoting(state) {
   return `
     <div class="voting-view anim-fade-in">
       <div class="voting-header">
+        ${state.roomCode && !state.isHub ? `<div class="game-header-roomcode">${state.roomCode}</div>` : ''}
         <h1>Vote for the Best!</h1>
         <p class="voting-subtitle"${isHoldout ? ' style="color:var(--gold);font-weight:700"' : ''}>${isHoldout ? "Everyone's waiting for you..." : 'Whose video was the most interesting?'}</p>
-        <div class="vote-progress">${votedCount}/${totalPlayers} votes in</div>
+        <div class="vote-progress">
+          <div class="vote-progress-pips">
+            ${Array.from({length: totalPlayers}, (_, i) =>
+              `<div class="vote-progress-pip${i < votedCount ? ' filled' : ''}"></div>`
+            ).join('')}
+          </div>
+          <span class="vote-progress-label">${votedCount} of ${totalPlayers} voted</span>
+        </div>
       </div>
       <div class="scrollable-content">
         ${slotListHtml}
@@ -425,6 +469,7 @@ export function renderResults(state) {
   return `
     <div class="results-view anim-fade-in">
       <div class="results-header">
+        ${state.roomCode && !state.isHub ? `<div class="game-header-roomcode">${state.roomCode}</div>` : ''}
         <h1>Round ${state.room?.round || 1} Results</h1>
         <div class="results-announcement">
           ${winner
