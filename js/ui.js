@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=25';
+import { formatDuration } from './hub.js?v=26';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -516,7 +516,7 @@ export function renderHubLobby(state) {
           <div class="hub-player-list">
             <h2>PLAYERS (${playerCount})</h2>
             ${state.players.map(p => `
-              <div class="hub-player-item ${p.ready ? 'ready' : ''}">
+              <div class="hub-player-item ${p.ready ? 'ready' : ''}"${state._justJoinedIds?.has(p.id) ? ' data-newly-joined="true"' : ''}>
                 ${p.id === state.playerId
                   ? `<div class="player-avatar player-avatar--cyclable" style="background:${getPlayerColor(p.id)}" data-action="cycle-avatar" title="Tap to change avatar">${avatarContent(p)}</div>`
                   : `<div class="player-avatar" style="background:${getPlayerColor(p.id)}">${avatarContent(p)}</div>`}

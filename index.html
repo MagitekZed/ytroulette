@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css?v=25">
+    <link rel="stylesheet" href="css/styles.css?v=26">
 </head>
 <body>
     <div id="room-code-badge" class="room-badge hidden"></div>
@@ -21,10 +21,14 @@
         <div id="yt-player"></div>
     </div>
 
+    <!-- Hub overlay (countdown, curtain) and banner (join fanfare) — outside #app, JS-owned lifecycle -->
+    <div id="hub-overlay" class="hub-overlay" aria-hidden="true"></div>
+    <div id="hub-banner" class="hub-banner" aria-hidden="true"></div>
+
     <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/morphdom@2/dist/morphdom-umd.min.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
-    <script type="module" src="js/app.js?v=25"></script>
+    <script type="module" src="js/app.js?v=26"></script>
 </body>
 </html>

@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=25';
-import * as Hub from './hub.js?v=25';
+import * as UI from './ui.js?v=26';
+import * as Hub from './hub.js?v=26';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -21,6 +21,8 @@ const LETTERS_AND_SPECIALS = LETTERS + SPECIALS;
 const EMOJI_AVATARS = ['🎮','🦄','🚀','🐙','🍕','👻','🎯','🦖','⚡','🧙','🌮','🦊','🤖','🍄','🐸','🎸','👑','🐝','☄️','🎲'];
 const DEFAULT_WIN_SCORE = 3;
 const TERM_LENGTH = 4;
+
+const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ============================================================
 // STATE
@@ -45,6 +47,14 @@ const state = {
   _lastTalliedRound: null, // Per-round dedupe token for tallyAndAdvance (anti double-score)
   revealingVotes: false,  // Hub-only: 1.5s blind-vote reveal window after final vote
   _avatarWriteTimer: null, // Debounce handle for avatar DB writes
+  _showingCountdown: false,
+  _countdownTimeouts: [],
+  _showingCurtain: false,
+  _curtainTimeout: null,
+  _joinBannerQueue: [],
+  _joinBannerActive: false,
+  _joinBannerTimeout: null,
+  _justJoinedIds: new Set(),
 };
 
 // Expose state for UI rendering
@@ -99,6 +109,170 @@ function startSlotReveal() {
 function stopSlotReveal() {
   slotIntervals.forEach(clearInterval);
   slotIntervals.length = 0;
+}
+
+// ============================================================
+// HUB OVERLAY + BANNER (countdown, curtain, join fanfare)
+// JS owns the lifecycle of #hub-overlay and #hub-banner —
+// they live outside #app and morphdom never touches them.
+// ============================================================
+function setOverlay(html) {
+  const el = document.getElementById('hub-overlay');
+  if (!el) return;
+  el.innerHTML = html;
+  el.classList.add('is-active');
+}
+
+function clearOverlay() {
+  const el = document.getElementById('hub-overlay');
+  if (!el) return;
+  el.classList.remove('is-active');
+  el.innerHTML = '';
+}
+
+function setBanner(html, modifierClass) {
+  const el = document.getElementById('hub-banner');
+  if (!el) return;
+  el.innerHTML = html;
+  if (modifierClass) el.classList.add(modifierClass);
+  el.classList.add('is-active');
+}
+
+function clearBanner() {
+  const el = document.getElementById('hub-banner');
+  if (!el) return;
+  el.classList.remove('is-active', 'hub-banner--join');
+  el.innerHTML = '';
+}
+
+// --- Ready-up countdown (Step 1.1) ---
+function scheduleCountdown(fn, ms) {
+  const id = setTimeout(() => {
+    state._countdownTimeouts = state._countdownTimeouts.filter(t => t !== id);
+    fn();
+  }, ms);
+  state._countdownTimeouts.push(id);
+  return id;
+}
+
+async function runCountdown() {
+  if (state._showingCountdown) return;
+  state._showingCountdown = true;
+
+  if (reducedMotion()) {
+    setOverlay('<div class="hub-countdown-num hub-countdown-num--reduced">Starting...</div>');
+    scheduleCountdown(async () => {
+      if (!state._showingCountdown) return;
+      clearOverlay();
+      state._showingCountdown = false;
+      await startGame();
+      runCurtain();
+    }, 600);
+    return;
+  }
+
+  const tick = (text, modifier) => {
+    if (!state._showingCountdown) return;
+    const cls = modifier ? `hub-countdown-num ${modifier}` : 'hub-countdown-num';
+    setOverlay(`<div class="${cls}">${text}</div>`);
+  };
+
+  tick('3');
+  scheduleCountdown(() => {
+    tick('2');
+    scheduleCountdown(() => {
+      tick('1');
+      scheduleCountdown(() => {
+        tick('GO!', 'hub-countdown-num--go');
+        scheduleCountdown(async () => {
+          if (!state._showingCountdown) return;
+          await startGame();
+          state._showingCountdown = false;
+          state._countdownTimeouts.forEach(clearTimeout);
+          state._countdownTimeouts = [];
+          clearOverlay();
+          runCurtain();
+        }, 1200);
+      }, 1000);
+    }, 1000);
+  }, 1000);
+}
+
+function abortCountdown() {
+  state._showingCountdown = false;
+  state._countdownTimeouts.forEach(clearTimeout);
+  state._countdownTimeouts = [];
+  clearOverlay();
+}
+
+// --- Game-start curtain (Step 1.2) ---
+function runCurtain() {
+  if (state._showingCurtain) return;
+  state._showingCurtain = true;
+
+  const activePlayerId = state.room?.player_order?.[0];
+  const activePlayer = state.players.find(p => p.id === activePlayerId);
+  const name = activePlayer?.name || '???';
+  const color = activePlayerId ? UI.getPlayerColor(activePlayerId) : 'var(--gold)';
+
+  const escName = (s) => {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  };
+
+  setOverlay(
+    `<div class="hub-curtain">
+       <span class="hub-curtain-label">First up:</span>
+       <span class="hub-curtain-name" style="color:${color}">${escName(name)}</span>
+     </div>`
+  );
+
+  const duration = reducedMotion() ? 600 : 1600;
+  state._curtainTimeout = setTimeout(() => {
+    state._curtainTimeout = null;
+    state._showingCurtain = false;
+    clearOverlay();
+    if (state.isHub && state.room?.status === 'playing'
+        && (state.room?.playback_status === 'searching' || state.room?.playback_status === 'idle')
+        && !state.isSearching) {
+      triggerSearch();
+    }
+  }, duration);
+}
+
+// --- Player join fanfare (Step 1.3) ---
+function enqueueJoinBanner(player) {
+  state._joinBannerQueue.push(player);
+  if (!state._joinBannerActive) runJoinBanner();
+}
+
+function runJoinBanner() {
+  if (state._joinBannerQueue.length === 0) {
+    state._joinBannerActive = false;
+    return;
+  }
+  state._joinBannerActive = true;
+  const player = state._joinBannerQueue.shift();
+  const color = UI.getPlayerColor(player.id);
+  const avatar = UI.avatarContent(player);
+  const escName = (s) => {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  };
+  setBanner(
+    `<div class="hub-join-banner" style="border-color:${color}">
+       <div class="hub-join-avatar" style="background:${color}">${avatar}</div>
+       <div class="hub-join-text">${escName(player.name)} joined</div>
+     </div>`,
+    'hub-banner--join'
+  );
+  state._joinBannerTimeout = setTimeout(() => {
+    state._joinBannerTimeout = null;
+    clearBanner();
+    runJoinBanner();
+  }, 2020);
 }
 
 // ============================================================
@@ -164,8 +338,8 @@ async function init() {
 
       // Hub auto-start safety net: handles the case where the Hub refreshed
       // while all players were already ready (no realtime event arrives to trigger handlePlayerChange).
-      // Safe with concurrent realtime path because startGame has its own isProcessing guard.
-      if (state.isHub && state.room?.status === 'lobby'
+      // Skip during countdown so the in-flight 3-2-1-GO sequence doesn't get pre-empted.
+      if (state.isHub && state.room?.status === 'lobby' && !state._showingCountdown
           && state.players.length >= 2 && state.players.every(p => p.ready)) {
         await startGame();
       }
@@ -192,6 +366,17 @@ function clearSession() {
   state.isSearching = false;
   state.isProcessing = false;
   state._lastTalliedRound = null;
+  state._showingCountdown = false;
+  state._countdownTimeouts.forEach(clearTimeout);
+  state._countdownTimeouts = [];
+  state._showingCurtain = false;
+  if (state._curtainTimeout) { clearTimeout(state._curtainTimeout); state._curtainTimeout = null; }
+  state._joinBannerQueue = [];
+  state._joinBannerActive = false;
+  if (state._joinBannerTimeout) { clearTimeout(state._joinBannerTimeout); state._joinBannerTimeout = null; }
+  state._justJoinedIds.clear();
+  clearOverlay();
+  clearBanner();
   if (state.channel) {
     db.removeChannel(state.channel);
     state.channel = null;
@@ -425,12 +610,31 @@ async function handlePlayerChange(payload) {
     if (!state.players.find(p => p.id === payload.new.id)) {
       state.players.push(payload.new);
     }
+    if (payload.new.id !== state.playerId) {
+      state._justJoinedIds.add(payload.new.id);
+      setTimeout(() => {
+        state._justJoinedIds.delete(payload.new.id);
+        debouncedRender();
+      }, 600);
+      if (state.isHub) enqueueJoinBanner(payload.new);
+    }
   } else if (payload.eventType === 'UPDATE') {
     const idx = state.players.findIndex(p => p.id === payload.new.id);
     if (idx >= 0) state.players[idx] = payload.new;
     else state.players.push(payload.new);
+    if (state._showingCountdown && !state.players.every(p => p.ready)) {
+      abortCountdown();
+    }
   } else if (payload.eventType === 'DELETE') {
     state.players = state.players.filter(p => p.id !== payload.old?.id);
+    if (state._showingCountdown && state.players.length < 2) {
+      abortCountdown();
+    }
+    if (state._showingCurtain && state.players.length < 2) {
+      state._showingCurtain = false;
+      if (state._curtainTimeout) { clearTimeout(state._curtainTimeout); state._curtainTimeout = null; }
+      clearOverlay();
+    }
   }
 
   // Host/Hub auto-tally: when all players have voted
@@ -445,10 +649,10 @@ async function handlePlayerChange(payload) {
   }
 
   // Hub auto-start: when all players ready
-  // (startGame manages its own isProcessing guard)
-  if (state.isHub && state.room?.status === 'lobby') {
+  // Routes through runCountdown → startGame (its own isProcessing guard)
+  if (state.isHub && state.room?.status === 'lobby' && !state._showingCountdown) {
     if (state.players.length >= 2 && state.players.every(p => p.ready)) {
-      await startGame();
+      runCountdown();
     }
   }
 
@@ -598,7 +802,8 @@ function showView(name) {
   render();
 
   // When hub enters game view, trigger the first search
-  if (state.isHub && name === 'game' && state.room?.playback_status === 'searching' && !state.isSearching) {
+  // (skip during the curtain — the curtain's tail kicks off the search itself)
+  if (state.isHub && name === 'game' && state.room?.playback_status === 'searching' && !state.isSearching && !state._showingCurtain) {
     triggerSearch();
   }
 
@@ -685,10 +890,13 @@ function render() {
     }
   }
 
-  if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'searching') {
+  if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'searching' && !state._showingCurtain) {
     // startSlotReveal has its own guards: skips if intervals already running OR
     // if no fresh cells (.hub-char without --rolling/--locked) exist. The HTML
     // emits cells without those classes; JS adds --rolling inside startSlotReveal.
+    // Guard: while the game-start curtain is still showing, hold the reveal so it
+    // starts crisply at curtain-out. The curtain's tail calls triggerSearch which
+    // re-renders — that pass kicks the reveal off cleanly.
     startSlotReveal();
   } else {
     stopSlotReveal();
@@ -764,6 +972,15 @@ async function startGame() {
       search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
       last_round_winner: null, streak_count: 0,
     }).eq('code', state.roomCode);
+
+    // Optimistic local update so the curtain (called immediately after) can
+    // read player_order without waiting for the realtime echo.
+    if (state.room) {
+      state.room.player_order = order;
+      state.room.current_player_index = 0;
+      state.room.current_search_term = term;
+      state.room.round = 1;
+    }
   } finally {
     state.isProcessing = false;
   }
