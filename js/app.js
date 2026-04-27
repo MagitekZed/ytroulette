@@ -186,6 +186,12 @@ async function runCountdown() {
         tick('GO!', 'hub-countdown-num--go');
         scheduleCountdown(async () => {
           if (!state._showingCountdown) return;
+          // Claim the curtain BEFORE the DB write so the realtime echo's render
+          // pass (which arrives mid-await) skips the slot-reveal gates at
+          // showView and render(). Without this, the echo briefly flips
+          // playback_status to 'searching' and starts the slot machine
+          // underneath the not-yet-shown curtain.
+          state._showingCurtain = true;
           await startGame();
           state._showingCountdown = false;
           state._countdownTimeouts.forEach(clearTimeout);
@@ -207,7 +213,9 @@ function abortCountdown() {
 
 // --- Game-start curtain (Step 1.2) ---
 function runCurtain() {
-  if (state._showingCurtain) return;
+  // _showingCurtain is now claimed in runCountdown BEFORE awaiting startGame,
+  // so an early-return on it would no-op every call. Trust the call sites
+  // (runCountdown is the only one) and just (re)assert the flag here.
   state._showingCurtain = true;
 
   const activePlayerId = state.room?.player_order?.[0];
@@ -803,7 +811,7 @@ function showView(name) {
 
   // When hub enters game view, trigger the first search
   // (skip during the curtain — the curtain's tail kicks off the search itself)
-  if (state.isHub && name === 'game' && state.room?.playback_status === 'searching' && !state.isSearching && !state._showingCurtain) {
+  if (state.isHub && name === 'game' && state.room?.playback_status === 'searching' && !state.isSearching && !state._showingCurtain && !state._showingCountdown) {
     triggerSearch();
   }
 
@@ -890,7 +898,7 @@ function render() {
     }
   }
 
-  if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'searching' && !state._showingCurtain) {
+  if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'searching' && !state._showingCurtain && !state._showingCountdown) {
     // startSlotReveal has its own guards: skips if intervals already running OR
     // if no fresh cells (.hub-char without --rolling/--locked) exist. The HTML
     // emits cells without those classes; JS adds --rolling inside startSlotReveal.

@@ -1895,7 +1895,7 @@ input[type="text"]:focus { border-color: var(--red); }
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: countdownPop 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: countdownPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 .hub-countdown-num--go {
   font-size: 14rem;
@@ -1903,7 +1903,7 @@ input[type="text"]:focus { border-color: var(--red); }
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: countdownPop 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+  animation: countdownPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
              goShockwave 0.6s ease-out forwards;
   border-radius: 50%;
 }
