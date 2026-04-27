@@ -1552,7 +1552,7 @@ input[type="text"]:focus { border-color: var(--red); }
   gap: 2px;
 }
 .hub-thumb-title {
-  font-size: 0.65rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -1566,12 +1566,12 @@ input[type="text"]:focus { border-color: var(--red); }
   gap: 6px;
 }
 .hub-thumb-duration {
-  font-size: 0.6rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
   font-weight: 600;
 }
 .hub-thumb-views {
-  font-size: 0.55rem;
+  font-size: 0.7rem;
   color: var(--text-dim);
 }
 .hub-badge-playlist {
@@ -2733,8 +2733,9 @@ input[type="text"]:focus { border-color: var(--red); }
   /* Title scale-up + tighter letter-spacing */
   .title {
     font-size: 8.5rem;
-    letter-spacing: -5px;
+    letter-spacing: -3px;
     line-height: 0.95;
+    padding-right: 12px;
   }
   .title-kicker {
     font-size: 1.4rem;
@@ -2909,7 +2910,8 @@ input[type="text"]:focus { border-color: var(--red); }
 @media (min-width: 1400px) {
   .title {
     font-size: 12rem;
-    letter-spacing: -7px;
+    letter-spacing: -5px;
+    padding-right: 16px;
   }
   .title-kicker {
     font-size: 1.6rem;
