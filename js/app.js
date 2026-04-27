@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=19';
-import * as Hub from './hub.js?v=19';
+import * as UI from './ui.js?v=20';
+import * as Hub from './hub.js?v=20';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -17,6 +17,8 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const ROOM_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const SPECIALS = `1234567890&#()@!?:._"'-,`;  // 23 special characters for search terms
+const LETTERS_AND_SPECIALS = LETTERS + SPECIALS;
+const EMOJI_AVATARS = ['🎮','🦄','🚀','🐙','🍕','👻','🎯','🦖','⚡','🧙','🌮','🦊','🤖','🍄','🐸','🎸','👑','🐝','☄️','🎲'];
 const DEFAULT_WIN_SCORE = 3;
 const TERM_LENGTH = 4;
 
@@ -42,10 +44,44 @@ const state = {
   _pollInterval: null,    // Handle for the 2s poll fallback
   _lastTalliedRound: null, // Per-round dedupe token for tallyAndAdvance (anti double-score)
   revealingVotes: false,  // Hub-only: 1.5s blind-vote reveal window after final vote
+  _avatarWriteTimer: null, // Debounce handle for avatar DB writes
 };
 
 // Expose state for UI rendering
 export { state, db };
+
+// ============================================================
+// SLOT-MACHINE TERM REVEAL (Hub searching state)
+// ============================================================
+const slotIntervals = [];
+
+function startSlotReveal() {
+  stopSlotReveal();
+  const cells = document.querySelectorAll('.hub-char--rolling');
+  cells.forEach((cell, i) => {
+    const finalChar = cell.dataset.finalChar;
+    const lockAt = 400 + i * 200;
+    const startTime = performance.now();
+    const tickInterval = setInterval(() => {
+      if (performance.now() - startTime >= lockAt) {
+        clearInterval(tickInterval);
+        cell.textContent = finalChar;
+        cell.classList.remove('hub-char--rolling');
+        cell.classList.add('hub-char--locked');
+        const idx = slotIntervals.indexOf(tickInterval);
+        if (idx >= 0) slotIntervals.splice(idx, 1);
+      } else {
+        cell.textContent = LETTERS_AND_SPECIALS[Math.floor(Math.random() * LETTERS_AND_SPECIALS.length)];
+      }
+    }, 60);
+    slotIntervals.push(tickInterval);
+  });
+}
+
+function stopSlotReveal() {
+  slotIntervals.forEach(clearInterval);
+  slotIntervals.length = 0;
+}
 
 // ============================================================
 // INIT
@@ -230,6 +266,7 @@ async function createRoom(playerName, winScore) {
 
   const { error: playerErr } = await db.from('yt_players').insert({
     id: state.playerId, room_code: code, name: playerName,
+    avatar: EMOJI_AVATARS[Math.floor(Math.random() * EMOJI_AVATARS.length)],
   });
   if (playerErr) { toast('Failed to join room.', 'error'); return; }
 
@@ -286,6 +323,7 @@ async function joinRoom(roomCode, playerName) {
 
   const { error } = await db.from('yt_players').insert({
     id: state.playerId, room_code: roomCode, name: playerName,
+    avatar: EMOJI_AVATARS[Math.floor(Math.random() * EMOJI_AVATARS.length)],
   });
   if (error) { toast('Failed to join.', 'error'); return; }
 
@@ -584,6 +622,14 @@ function render() {
       canvas.dataset.code = state.roomCode;
     }
   }
+
+  if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'searching') {
+    if (document.querySelector('.hub-char--rolling')) {
+      startSlotReveal();
+    }
+  } else {
+    stopSlotReveal();
+  }
 }
 
 function updateBadge() {
@@ -653,6 +699,7 @@ async function startGame() {
       status: 'playing', player_order: order, current_player_index: 0,
       current_search_term: term, round: 1, past_terms: [],
       search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
+      last_round_winner: null, streak_count: 0,
     }).eq('code', state.roomCode);
   } finally {
     state.isProcessing = false;
@@ -841,6 +888,15 @@ async function tallyAndAdvance() {
       }
     }
 
+    // Hot streak tracking (badge-only, no bonus points)
+    const lastWinner = state.room.last_round_winner;
+    const prevStreak = state.room.streak_count || 0;
+    let newStreak = prevStreak;
+    if (winnerId) {
+      newStreak = (winnerId === lastWinner) ? prevStreak + 1 : 1;
+    }
+    // Tied/no-winner rounds: preserve the existing streak (don't reset)
+
     state._lastTalliedRound = round;
 
     state.revealingVotes = true;
@@ -854,8 +910,11 @@ async function tallyAndAdvance() {
 
     const winScore = state.room.win_score || DEFAULT_WIN_SCORE;
     const gameWinner = state.players.find(p => (p.score || 0) >= winScore);
-    await db.from('yt_rooms').update({ status: gameWinner ? 'gameover' : 'results' })
-      .eq('code', state.roomCode);
+    await db.from('yt_rooms').update({
+      status: gameWinner ? 'gameover' : 'results',
+      last_round_winner: winnerId || lastWinner,
+      streak_count: newStreak,
+    }).eq('code', state.roomCode);
   } finally {
     state.isProcessing = false;
     state.revealingVotes = false;
@@ -910,6 +969,7 @@ async function playAgain() {
     status: state.isHub ? 'lobby' : 'playing', round: 1, current_player_index: 0,
     current_search_term: term, player_order: order, past_terms: [],
     search_results: [], selected_video_index: null, selected_video_id: null, playback_status: 'idle',
+    last_round_winner: null, streak_count: 0,
   }).eq('code', state.roomCode);
 }
 
@@ -1031,7 +1091,7 @@ function toast(message, type = 'info') {
 // ============================================================
 function setupEventListeners() {
   const tap = () => { try { navigator.vibrate?.(10); } catch {} };
-  const VIBRATE_ACTIONS = new Set(['select-video','cast-vote','reroll','enter-replace','replace-char','enter-swap','swap-char','toggle-ready','finish-turn','stop-and-next']);
+  const VIBRATE_ACTIONS = new Set(['select-video','cast-vote','reroll','enter-replace','replace-char','enter-swap','swap-char','toggle-ready','finish-turn','stop-and-next','cycle-avatar']);
 
   document.getElementById('app').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-action]');
@@ -1091,6 +1151,21 @@ function setupEventListeners() {
         break;
       }
       case 'toggle-ready': await toggleReady(); break;
+      case 'cycle-avatar': {
+        const me = getMe();
+        if (!me) break;
+        const currentIdx = EMOJI_AVATARS.indexOf(me.avatar);
+        const nextIdx = (currentIdx + 1) % EMOJI_AVATARS.length;
+        const nextAvatar = EMOJI_AVATARS[nextIdx];
+        me.avatar = nextAvatar;
+        render();
+        clearTimeout(state._avatarWriteTimer);
+        state._avatarWriteTimer = setTimeout(async () => {
+          await db.from('yt_players').update({ avatar: nextAvatar })
+            .eq('id', state.playerId).eq('room_code', state.roomCode);
+        }, 300);
+        break;
+      }
       case 'start-game': await startGame(); break;
       case 'reroll': await useReroll(); break;
       case 'enter-replace':

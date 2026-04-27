@@ -1,0 +1,2 @@
+ALTER TABLE yt_rooms ADD COLUMN IF NOT EXISTS last_round_winner TEXT;
+ALTER TABLE yt_rooms ADD COLUMN IF NOT EXISTS streak_count INTEGER DEFAULT 0;

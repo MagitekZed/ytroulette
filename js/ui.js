@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=19';
+import { formatDuration } from './hub.js?v=20';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -17,6 +17,10 @@ export function getPlayerColor(playerId) {
     hash = playerId.charCodeAt(i) + ((hash << 5) - hash);
   }
   return PLAYER_COLORS[Math.abs(hash) % PLAYER_COLORS.length];
+}
+
+export function avatarContent(p) {
+  return p?.avatar || (p?.name?.[0]?.toUpperCase() ?? '?');
 }
 
 // ============================================================
@@ -86,7 +90,9 @@ export function renderLobby(state) {
           <h2>PLAYERS (${state.players.length})</h2>
           ${state.players.map(p => `
             <div class="player-card ${p.ready ? 'ready' : ''}">
-              <div class="player-avatar" style="background:${getPlayerColor(p.id)}">${p.name[0].toUpperCase()}</div>
+              ${p.id === state.playerId
+                ? `<div class="player-avatar player-avatar--cyclable" style="background:${getPlayerColor(p.id)}" data-action="cycle-avatar" title="Tap to change avatar">${avatarContent(p)}</div>`
+                : `<div class="player-avatar" style="background:${getPlayerColor(p.id)}">${avatarContent(p)}</div>`}
               <span class="player-name">
                 ${esc(p.name)}${p.id === state.room?.host_id ? ' <span class="host-badge">HOST</span>' : ''}
               </span>
@@ -332,7 +338,7 @@ export function renderVoting(state) {
           ${voteTargets.map(p => `
             <div class="vote-card">
               <div class="vote-card-player">
-                <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:36px;height:36px;font-size:0.85rem">${p.name[0].toUpperCase()}</div>
+                <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:36px;height:36px;font-size:0.85rem">${avatarContent(p)}</div>
                 <span class="vote-card-name">${esc(p.name)}</span>
               </div>
             </div>`).join('')}
@@ -422,7 +428,7 @@ export function renderResults(state) {
         <h1>Round ${state.room?.round || 1} Results</h1>
         <div class="results-announcement">
           ${winner
-            ? `<span class="points-awarded">★ ${esc(winner.name)} earns ${pointsAwarded} point${pointsAwarded > 1 ? 's' : ''}!${isUnanimous ? ' (Unanimous!)' : ''}</span>`
+            ? `<span class="points-awarded">★ ${esc(winner.name)} earns ${pointsAwarded} point${pointsAwarded > 1 ? 's' : ''}!${isUnanimous ? ' (Unanimous!)' : ''}</span>${state.room?.streak_count >= 2 ? `<span class="streak-badge">🔥 Hot Streak ×${state.room.streak_count}</span>` : ''}`
             : '<span style="color:var(--text-muted)">No winner this round.</span>'}
         </div>
       </div>
@@ -444,7 +450,7 @@ export function renderResults(state) {
           ${sorted.map((p, i) => `
             <div class="score-row">
               <span class="score-rank">${getRankEmoji(i)}</span>
-              <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:32px;height:32px;font-size:0.8rem">${p.name[0].toUpperCase()}</div>
+              <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:32px;height:32px;font-size:0.8rem">${avatarContent(p)}</div>
               <span class="score-name">${esc(p.name)}</span>
               <span class="score-points">${p.score || 0} pts</span>
             </div>
@@ -476,7 +482,7 @@ export function renderGameOver(state) {
         ${sorted.map((p, i) => `
           <div class="score-row">
             <span class="score-rank">${getRankEmoji(i)}</span>
-            <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:32px;height:32px;font-size:0.8rem">${p.name[0].toUpperCase()}</div>
+            <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:32px;height:32px;font-size:0.8rem">${avatarContent(p)}</div>
             <span class="score-name">${esc(p.name)}</span>
             <span class="score-points">${p.score || 0} pts</span>
           </div>
@@ -511,7 +517,9 @@ export function renderHubLobby(state) {
             <h2>PLAYERS (${playerCount})</h2>
             ${state.players.map(p => `
               <div class="hub-player-item ${p.ready ? 'ready' : ''}">
-                <div class="player-avatar" style="background:${getPlayerColor(p.id)}">${p.name[0].toUpperCase()}</div>
+                ${p.id === state.playerId
+                  ? `<div class="player-avatar player-avatar--cyclable" style="background:${getPlayerColor(p.id)}" data-action="cycle-avatar" title="Tap to change avatar">${avatarContent(p)}</div>`
+                  : `<div class="player-avatar" style="background:${getPlayerColor(p.id)}">${avatarContent(p)}</div>`}
                 <span>${esc(p.name)}</span>
                 <span class="ready-indicator ${p.ready ? 'is-ready' : 'not-ready'}">${p.ready ? '✓ Ready' : '○ Waiting'}</span>
               </div>
@@ -587,7 +595,7 @@ export function renderHubGame(state) {
         </div>
         <div class="hub-main">
           <div class="hub-searching">
-            <div class="hub-search-term">${term.split('').map(ch => `<span class="hub-char">${ch}</span>`).join('')}</div>
+            <div class="hub-search-term">${term.split('').map(ch => `<span class="hub-char hub-char--rolling" data-final-char="${esc(ch)}">${esc(ch)}</span>`).join('')}</div>
             <div class="hub-searching-spinner">🔍 Searching YouTube...</div>
           </div>
         </div>
@@ -729,7 +737,7 @@ export function renderHubVoting(state) {
               const voted = !!p.vote_for;
               return `
                 <div class="hub-vote-pending-card ${voted ? 'hub-vote-pending-card--voted' : ''}">
-                  <div class="hub-vote-pending-avatar" style="background:${voted ? getPlayerColor(p.id) : 'var(--surface)'};color:${voted ? 'white' : 'var(--text-dim)'}">${esc(p.name[0].toUpperCase())}</div>
+                  <div class="hub-vote-pending-avatar" style="background:${voted ? getPlayerColor(p.id) : 'var(--surface)'};color:${voted ? 'white' : 'var(--text-dim)'}">${avatarContent(p)}</div>
                   <div class="hub-vote-pending-info">
                     <div class="hub-vote-pending-name" style="color:${voted ? getPlayerColor(p.id) : 'var(--text-muted)'}">${esc(p.name)}</div>
                     <div class="hub-vote-pending-status">${voted ? '✓ Voted' : '⋯ Waiting'}</div>
@@ -760,14 +768,14 @@ export function renderHubResults(state) {
         <div class="hub-results-content">
           <div class="hub-results-announcement">
             ${winner
-              ? `<div class="hub-winner-name" style="color:${getPlayerColor(winner.id)}">★ ${esc(winner.name)} earns ${pointsAwarded} point${pointsAwarded > 1 ? 's' : ''}!${isUnanimous ? ' 🔥 Unanimous!' : ''}</div>`
+              ? `<div class="hub-winner-name" style="color:${getPlayerColor(winner.id)}">★ ${esc(winner.name)} earns ${pointsAwarded} point${pointsAwarded > 1 ? 's' : ''}!${isUnanimous ? ' 🔥 Unanimous!' : ''}${state.room?.streak_count >= 2 ? `<span class="streak-badge">🔥 Hot Streak ×${state.room.streak_count}</span>` : ''}</div>`
               : '<div style="color:var(--text-muted);font-size:1.5rem">No winner this round.</div>'}
           </div>
           <div class="hub-scoreboard">
             ${sorted.map((p, i) => `
               <div class="hub-score-row">
                 <span class="hub-score-rank">${getRankEmoji(i)}</span>
-                <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:48px;height:48px;font-size:1.2rem">${p.name[0].toUpperCase()}</div>
+                <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:48px;height:48px;font-size:1.2rem">${avatarContent(p)}</div>
                 <span class="hub-score-name">${esc(p.name)}</span>
                 <div class="hub-score-bar" style="width:${Math.max(5, ((p.score || 0) / winScore) * 100)}%"></div>
                 <span class="hub-score-pts">${p.score || 0}/${winScore}</span>
@@ -802,7 +810,7 @@ export function renderHubGameOver(state) {
             ${sorted.map((p, i) => `
               <div class="hub-score-row">
                 <span class="hub-score-rank">${getRankEmoji(i)}</span>
-                <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:48px;height:48px;font-size:1.2rem">${p.name[0].toUpperCase()}</div>
+                <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:48px;height:48px;font-size:1.2rem">${avatarContent(p)}</div>
                 <span class="hub-score-name">${esc(p.name)}</span>
                 <span class="hub-score-pts">${p.score || 0} pts</span>
               </div>

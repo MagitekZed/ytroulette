@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS yt_rooms (
   selected_video_id TEXT,
   playback_status TEXT DEFAULT 'idle',
   videos JSONB DEFAULT '[]'::JSONB,
+  last_round_winner TEXT,
+  streak_count INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -39,6 +41,7 @@ CREATE TABLE IF NOT EXISTS yt_players (
   picked_video_id TEXT,
   picked_video_title TEXT,
   picked_video_thumbnail TEXT,
+  avatar TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (id, room_code)
 );

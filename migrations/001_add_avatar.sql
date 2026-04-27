@@ -1,0 +1,1 @@
+ALTER TABLE yt_players ADD COLUMN IF NOT EXISTS avatar TEXT;

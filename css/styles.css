@@ -1356,6 +1356,44 @@ input[type="text"]:focus { border-color: var(--red); }
 .hub-char:nth-child(2) { animation-delay: 0.1s; }
 .hub-char:nth-child(3) { animation-delay: 0.2s; }
 .hub-char:nth-child(4) { animation-delay: 0.3s; }
+
+.hub-char--rolling {
+  color: rgba(255, 215, 0, 0.7);
+  transform: translateY(-2px);
+  transition: transform 0.1s, color 0.1s;
+}
+.hub-char--locked {
+  animation: hubCharLock 0.25s ease-out;
+}
+@keyframes hubCharLock {
+  0% { transform: scale(1.2) translateY(-2px); color: var(--gold); }
+  100% { transform: scale(1) translateY(0); color: inherit; }
+}
+
+.player-avatar--cyclable {
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.player-avatar--cyclable:hover {
+  transform: scale(1.08);
+}
+.player-avatar--cyclable:active {
+  transform: scale(0.92);
+}
+
+.streak-badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #FF6B6B, #FFA07A);
+  color: white;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  vertical-align: middle;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
 .hub-searching-spinner {
   font-family: var(--font-heading);
   font-size: 1.3rem;
