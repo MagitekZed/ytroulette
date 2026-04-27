@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=18';
+import { formatDuration } from './hub.js?v=19';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -349,15 +349,29 @@ export function renderVoting(state) {
     : -1;
   const myVoteSlot = myVoteSlotIdx >= 0 ? voteSlots[myVoteSlotIdx] : null;
 
-  const pendingStripHtml = `
-    <div class="voting-pending-strip">
-      ${voteTargets.map(p => {
-        const voted = !!p.vote_for;
+  // Combined list: number badge + name + voting status. Replaces the
+  // previous separate legend + pending strip to fit phone viewport without scrolling.
+  const slotListHtml = `
+    <div class="vote-slot-list">
+      ${voteSlots.map((s, i) => {
+        const player = !s.isNone ? state.players.find(p => p.id === s.id) : null;
+        const voted = !!player?.vote_for;
+        const isMe = s.id === state.playerId;
+        const isMyVote = hasVoted && me?.vote_for === s.id;
+        const color = s.isNone ? 'var(--text-muted)' : getPlayerColor(s.id);
+        let status = '';
+        if (s.isNone) {
+          status = '';
+        } else if (voted) {
+          status = '<span class="vote-slot-status vote-slot-status--voted">✓ Voted</span>';
+        } else {
+          status = '<span class="vote-slot-status vote-slot-status--waiting">⋯ Waiting</span>';
+        }
         return `
-          <div class="voting-pending-pill ${voted ? 'voting-pending-pill--voted' : ''}">
-            <span class="voting-pending-avatar" style="background:${voted ? getPlayerColor(p.id) : 'var(--surface)'};color:${voted ? 'white' : 'var(--text-dim)'}">${esc(p.name[0].toUpperCase())}</span>
-            <span class="voting-pending-name">${esc(p.name)}</span>
-            <span class="voting-pending-check">${voted ? '✓' : '⋯'}</span>
+          <div class="vote-slot-row${isMyVote ? ' vote-slot-row--mine' : ''}${voted ? ' vote-slot-row--voted' : ''}">
+            <span class="vote-slot-num">${i + 1}</span>
+            <span class="vote-slot-name" style="color:${color}">${s.isNone ? '🚫 No Winner' : esc(s.name)}${isMe ? ' (you)' : ''}</span>
+            ${status}
           </div>`;
       }).join('')}
     </div>`;
@@ -370,36 +384,22 @@ export function renderVoting(state) {
         <div class="vote-progress">${votedCount}/${totalPlayers} votes in</div>
       </div>
       <div class="scrollable-content">
+        ${slotListHtml}
         ${hasVoted ? `
-          <div class="vote-card voted-for">
-            <div class="vote-card-player">
-              ${myVoteSlot && !myVoteSlot.isNone
-                ? `<div class="player-avatar" style="background:${getPlayerColor(myVoteSlot.id)};width:36px;height:36px;font-size:0.85rem">${myVoteSlot.name[0].toUpperCase()}</div>`
-                : '<div class="player-avatar" style="background:var(--surface);width:36px;height:36px;font-size:0.85rem">🚫</div>'}
-              <span class="vote-card-name">${myVoteSlot ? (myVoteSlot.isNone ? 'No Winner' : esc(myVoteSlot.name)) : '???'}</span>
-            </div>
-            <div style="color:var(--teal);font-weight:600;font-size:0.85rem">✓ Your Vote</div>
+          <div class="vote-confirm">
+            ${myVoteSlot && !myVoteSlot.isNone
+              ? `<span class="vote-confirm-label" style="color:${getPlayerColor(myVoteSlot.id)}">✓ You voted for ${esc(myVoteSlot.name)}</span>`
+              : myVoteSlot?.isNone
+                ? '<span class="vote-confirm-label" style="color:var(--text-muted)">✓ You voted No Winner</span>'
+                : ''}
           </div>
-          ${pendingStripHtml}
           <p class="waiting-text">Waiting for other players to vote...</p>
         ` : `
-          <div class="vote-legend">
-            ${voteSlots.map((s, i) => `
-              <div class="vote-legend-row">
-                <span class="vote-legend-num">${i + 1}</span>
-                <span class="vote-legend-name" style="color:${s.isNone ? 'var(--text-muted)' : getPlayerColor(s.id)}">${s.isNone ? '🚫 No Winner' : esc(s.name)}${s.id === state.playerId ? ' (you)' : ''}</span>
-              </div>`).join('')}
-          </div>
           <div class="number-grid">
-            ${Array.from({ length: 20 }).map((_, i) => {
-              if (i < voteSlots.length) {
-                const s = voteSlots[i];
-                return `<button class="num-cell ${s.isNone ? 'num-cell-none' : ''}" data-action="cast-vote" data-value="${s.id}">${i + 1}</button>`;
-              }
-              return '<button class="num-cell num-cell-empty" disabled></button>';
-            }).join('')}
+            ${voteSlots.map((s, i) =>
+              `<button class="num-cell ${s.isNone ? 'num-cell-none' : ''}" data-action="cast-vote" data-value="${s.id}">${i + 1}</button>`
+            ).join('')}
           </div>
-          ${pendingStripHtml}
         `}
       </div>
       <button class="btn btn-text" data-action="leave-game">Leave Game</button>

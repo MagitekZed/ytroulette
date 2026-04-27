@@ -1640,59 +1640,68 @@ input[type="text"]:focus { border-color: var(--red); }
   color: #FF6B6B;
 }
 
-/* Phone pending strip — shows who has/hasn't voted */
-.voting-pending-strip {
+/* Combined vote slot list — number + name + vote status in one compact row */
+.vote-slot-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 8px;
+  margin-bottom: 16px;
 }
-.voting-pending-pill {
+.vote-slot-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  transition: all 0.3s ease;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
 }
-.voting-pending-pill--voted {
-  background: rgba(78, 205, 196, 0.08);
-  border-color: rgba(78, 205, 196, 0.3);
+.vote-slot-row--voted {
+  background: rgba(78, 205, 196, 0.06);
 }
-.voting-pending-avatar {
-  width: 32px;
-  height: 32px;
+.vote-slot-row--mine {
+  background: rgba(255, 215, 0, 0.08);
+  outline: 1px solid rgba(255, 215, 0, 0.4);
+}
+.vote-slot-num {
+  width: 28px; height: 28px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: var(--gold);
+  color: #1a1a00;
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  border: 1px solid var(--border);
 }
-.voting-pending-pill--voted .voting-pending-avatar {
-  border-color: transparent;
-}
-.voting-pending-name {
+.vote-slot-name {
   flex: 1;
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--text);
-}
-.voting-pending-pill:not(.voting-pending-pill--voted) .voting-pending-name {
-  color: var(--text-muted);
-}
-.voting-pending-check {
-  font-size: 1.1rem;
+  font-family: var(--font-heading);
   font-weight: 700;
-  color: var(--text-dim);
+  font-size: 0.95rem;
 }
-.voting-pending-pill--voted .voting-pending-check {
-  color: var(--teal);
+.vote-slot-status {
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.vote-slot-status--voted { color: var(--teal); }
+.vote-slot-status--waiting { color: var(--text-dim); }
+
+/* Vote confirmation line (after the user has cast their vote) */
+.vote-confirm {
+  text-align: center;
+  margin: 12px 0 4px;
+}
+.vote-confirm-label {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1rem;
 }
 
 /* Vote legend (phone voting number→name map) */
