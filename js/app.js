@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=41';
-import * as Hub from './hub.js?v=41';
+import * as UI from './ui.js?v=42';
+import * as Hub from './hub.js?v=42';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -349,6 +349,9 @@ function runTurnBanner(player, color) {
     state._turnBannerTimeout = null;
     state._showingTurnBanner = false;
     clearBanner();
+    // Banner duration: 2800ms total (350ms in + 2100ms full-visibility hold +
+    // 350ms out). Optimized for comprehension over speed — ~2s of clear
+    // readability so players can actually register whose turn is up.
     // Tail call: kick off triggerSearch now that the banner is done.
     // While the banner was up, the M1 optimistic flip was suppressed and
     // triggerSearch was deferred — fire it here. triggerSearch is a no-op if
@@ -358,7 +361,7 @@ function runTurnBanner(player, color) {
         && !state.isSearching) {
       triggerSearch();
     }
-  }, 1320);
+  }, 2800);
 }
 
 // ============================================================

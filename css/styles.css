@@ -3067,7 +3067,7 @@ input[type="text"]:focus { border-color: var(--red); }
     0 0 0 6px color-mix(in srgb, var(--player-color) 18%, transparent);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  animation: hubTurnBannerLife 1320ms ease-out forwards;
+  animation: hubTurnBannerLife 2800ms ease-out forwards;
 }
 .hub-turn-banner-label {
   font-family: var(--font-heading);
@@ -3087,10 +3087,11 @@ input[type="text"]:focus { border-color: var(--red); }
   text-shadow: 0 0 24px color-mix(in srgb, var(--player-color) 50%, transparent);
 }
 @keyframes hubTurnBannerLife {
-  0%   { opacity: 0; transform: translateY(-40px) scale(0.96); }
-  21%  { opacity: 1; transform: translateY(0) scale(1.0); }
-  82%  { opacity: 1; transform: translateY(0) scale(1.0); }
-  100% { opacity: 0; transform: translateY(-24px) scale(0.98); }
+  /* 2800ms total: 12.5% (350ms) entrance, 75% (2100ms) hold at full, 12.5% (350ms) exit */
+  0%     { opacity: 0; transform: translateY(-40px) scale(0.96); }
+  12.5%  { opacity: 1; transform: translateY(0) scale(1.0); }
+  87.5%  { opacity: 1; transform: translateY(0) scale(1.0); }
+  100%   { opacity: 0; transform: translateY(-24px) scale(0.98); }
 }
 
 /* Hub video timer pill — overlays the YT wrapper bottom-right */
