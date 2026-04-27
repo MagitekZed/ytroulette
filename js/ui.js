@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=30';
+import { formatDuration } from './hub.js?v=31';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -38,9 +38,12 @@ export function renderHome() {
         <p class="subtitle">Find the weirdest videos. Win the game.</p>
       </div>
       <div class="home-buttons">
-        <button class="btn btn-primary btn-lg btn-full" data-action="show-hub">🖥️ Host Game (Hub)</button>
-        <button class="btn btn-secondary btn-lg btn-full" data-action="show-create">📱 Create Game (Phone)</button>
-        <button class="btn btn-secondary btn-lg btn-full" data-action="show-join">Join Game</button>
+        <button class="btn btn-primary btn-lg btn-full" data-action="show-join">Join Game →</button>
+        <button class="btn btn-secondary btn-lg btn-full" data-action="show-create">Create Game (Phone)</button>
+        <div class="home-host-prompt">
+          <p class="home-host-kicker">Are you on a TV or desktop?</p>
+          <button class="btn-text-host" data-action="show-hub">Host the Hub Display →</button>
+        </div>
       </div>
       <div id="home-hub" class="form-card glass-card hidden">
         <h2>Configure the Hub</h2>
@@ -95,7 +98,9 @@ export function renderLobby(state) {
         <div class="players-section">
           <h2>PLAYERS (${state.players.length})</h2>
           ${state.players.map(p => `
-            <div class="player-card ${p.ready ? 'ready' : ''}">
+            <div class="player-card ${p.ready ? 'ready' : ''}"
+                 style="--player-color:${getPlayerColor(p.id)}"
+                 ${state._justReadiedIds?.has(p.id) ? 'data-just-readied="true"' : ''}>
               ${p.id === state.playerId
                 ? `<div class="player-avatar player-avatar--cyclable" style="background:${getPlayerColor(p.id)}" data-action="cycle-avatar" title="Tap to change avatar">${avatarContent(p)}</div>`
                 : `<div class="player-avatar" style="background:${getPlayerColor(p.id)}">${avatarContent(p)}</div>`}
@@ -137,11 +142,16 @@ export function renderGame(state) {
   const isHubRoom = state.room?.is_hub;
   const playbackStatus = state.room?.playback_status;
 
+  const turnInfoAttrs = `${state._turnJustStartedForMe ? ' data-turn-just-started="true"' : ''}${!isMyTurn && activePlayerId ? ` style="--turn-color:${getPlayerColor(activePlayerId)}"` : ''}`;
+  const turnInfoInner = isMyTurn
+    ? `<span class="game-turn-kicker">IT'S</span><span class="game-turn-text game-turn-text--mine">Your Turn!</span>`
+    : `<span class="game-turn-text game-turn-text--other">${esc(activePlayer?.name || '???')}'s Turn</span>`;
+
   const header = `
     <div class="game-header">
       ${state.roomCode && !state.isHub ? `<div class="game-header-roomcode">${state.roomCode}</div>` : ''}
       <div class="game-round">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns} · FIRST TO ${winScore}</div>
-      <div class="game-turn-info">${isMyTurn ? 'Your Turn!' : `${esc(activePlayer?.name || '???')}'s Turn`}</div>
+      <div class="game-turn-info"${turnInfoAttrs}>${turnInfoInner}</div>
       <div class="mini-scores">
         ${getSortedPlayers(state).map(p => `
           <span class="mini-score ${p.id === activePlayerId ? 'active-player' : ''}" style="--mini-color:${getPlayerColor(p.id)}${p.id === activePlayerId ? `;color:${getPlayerColor(p.id)}` : ''}">${esc(p.name)}: ${p.score || 0} pts</span>
@@ -167,7 +177,7 @@ export function renderGame(state) {
   }
 
   const termSection = `
-    <div class="search-term-section ${modeClass}">
+    <div class="search-term-section ${modeClass}"${state._termJustRevealed ? ' data-just-revealed="true"' : ''}>
       <div class="search-term-label">${termLabel}</div>
       <div class="search-term-chars" data-term="${esc(term)}">
         ${term.split('').map((ch, i) => {
@@ -273,15 +283,17 @@ function renderPlayerHubControls(state, playbackStatus) {
     <div class="pick-instructions">
       <p>Pick a video from the screen above!</p>
     </div>
-    ${renderNumberGrid(results.length)}`;
+    ${renderNumberGrid(results.length, state)}`;
 }
 
 // Numbered grid for selecting videos (phone UI)
-function renderNumberGrid(count) {
+function renderNumberGrid(count, state) {
+  const justLoaded = state?._justLoadedCells ? ' data-just-loaded="true"' : '';
   let cells = '';
   for (let i = 0; i < 20; i++) {
     const available = i < count;
-    cells += `<button class="num-cell ${available ? '' : 'num-cell-empty'}" 
+    const loadedAttr = available ? justLoaded : '';
+    cells += `<button class="num-cell ${available ? '' : 'num-cell-empty'}"${loadedAttr}
       ${available ? `data-action="select-video" data-value="${i}"` : 'disabled'}>${i + 1}</button>`;
   }
   return `<div class="number-grid">${cells}</div>`;
@@ -395,6 +407,7 @@ export function renderVoting(state) {
 
   // Combined list: number badge + name + voting status. Replaces the
   // previous separate legend + pending strip to fit phone viewport without scrolling.
+  // Rows are now the tap target (data-action only when !hasVoted).
   const slotListHtml = `
     <div class="vote-slot-list">
       ${voteSlots.map((s, i) => {
@@ -402,7 +415,8 @@ export function renderVoting(state) {
         const voted = !!player?.vote_for;
         const isMe = s.id === state.playerId;
         const isMyVote = hasVoted && me?.vote_for === s.id;
-        const color = s.isNone ? 'var(--text-muted)' : getPlayerColor(s.id);
+        const color = s.isNone ? '#FF6B6B' : getPlayerColor(s.id);
+        const nameColor = s.isNone ? 'var(--text-muted)' : getPlayerColor(s.id);
         let status = '';
         if (s.isNone) {
           status = '';
@@ -411,10 +425,15 @@ export function renderVoting(state) {
         } else {
           status = '<span class="vote-slot-status vote-slot-status--waiting">⋯ Waiting</span>';
         }
+        const tapAttr = !hasVoted ? ` data-action="cast-vote" data-value="${s.id}"` : '';
+        const cls = ['vote-slot-row'];
+        if (isMyVote) cls.push('vote-slot-row--mine');
+        if (voted) cls.push('vote-slot-row--voted');
+        if (s.isNone) cls.push('vote-slot-row--no-winner');
         return `
-          <div class="vote-slot-row${isMyVote ? ' vote-slot-row--mine' : ''}${voted ? ' vote-slot-row--voted' : ''}">
+          <div class="${cls.join(' ')}" style="--row-color:${color}"${tapAttr}>
             <span class="vote-slot-num">${i + 1}</span>
-            <span class="vote-slot-name" style="color:${color}">${s.isNone ? '🚫 No Winner' : esc(s.name)}${isMe ? ' (you)' : ''}</span>
+            <span class="vote-slot-name" style="color:${nameColor}">${s.isNone ? '🚫 No Winner' : esc(s.name)}${isMe ? ' (you)' : ''}</span>
             ${status}
           </div>`;
       }).join('')}
@@ -446,13 +465,7 @@ export function renderVoting(state) {
                 : ''}
           </div>
           <p class="waiting-text">Waiting for other players to vote...</p>
-        ` : `
-          <div class="number-grid">
-            ${voteSlots.map((s, i) =>
-              `<button class="num-cell ${s.isNone ? 'num-cell-none' : ''}" data-action="cast-vote" data-value="${s.id}">${i + 1}</button>`
-            ).join('')}
-          </div>
-        `}
+        ` : ''}
       </div>
       <button class="btn btn-text" data-action="leave-game">Leave Game</button>
     </div>`;
@@ -473,9 +486,9 @@ export function renderResults(state) {
       <div class="results-header">
         ${state.roomCode && !state.isHub ? `<div class="game-header-roomcode">${state.roomCode}</div>` : ''}
         <h1>Round ${state.room?.round || 1} Results</h1>
-        <div class="results-announcement">
+        <div class="results-announcement"${!state._resultsAnimated ? ' data-results-just-mounted="true"' : ''}>
           ${winner
-            ? `<span class="points-awarded">★ ${esc(winner.name)} earns ${pointsAwarded} point${pointsAwarded > 1 ? 's' : ''}!${isUnanimous ? ' (Unanimous!)' : ''}</span>${state.room?.streak_count >= 2 ? `<span class="streak-badge">🔥 Hot Streak ×${state.room.streak_count}</span>` : ''}`
+            ? `<span class="results-star">★</span><span class="points-awarded">${esc(winner.name)} earns ${pointsAwarded} point${pointsAwarded > 1 ? 's' : ''}!${isUnanimous ? ' (Unanimous!)' : ''}</span>${state.room?.streak_count >= 2 ? `<span class="streak-badge">🔥 Hot Streak ×${state.room.streak_count}</span>` : ''}`
             : '<span style="color:var(--text-muted)">No winner this round.</span>'}
         </div>
       </div>

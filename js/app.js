@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=30';
-import * as Hub from './hub.js?v=30';
+import * as UI from './ui.js?v=31';
+import * as Hub from './hub.js?v=31';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -55,6 +55,11 @@ const state = {
   _joinBannerActive: false,
   _joinBannerTimeout: null,
   _justJoinedIds: new Set(),
+  _justLoadedCells: false,
+  _termJustRevealed: false,
+  _turnJustStartedForMe: false,
+  _justReadiedIds: new Set(),
+  _resultsAnimated: false,
 };
 
 // Expose state for UI rendering
@@ -422,6 +427,11 @@ function clearSession() {
   state._joinBannerActive = false;
   if (state._joinBannerTimeout) { clearTimeout(state._joinBannerTimeout); state._joinBannerTimeout = null; }
   state._justJoinedIds.clear();
+  state._justLoadedCells = false;
+  state._termJustRevealed = false;
+  state._turnJustStartedForMe = false;
+  state._justReadiedIds.clear();
+  state._resultsAnimated = false;
   clearOverlay();
   clearBanner();
   if (state.channel) {
@@ -624,6 +634,8 @@ async function handleRoomChange(payload) {
   const oldStatus = state.room?.status;
   const oldPlayback = state.room?.playback_status;
   const oldTerm = state.room?.current_search_term;
+  const oldPlayerIndex = state.room?.current_player_index;
+  const oldResultsLen = state.room?.search_results?.length || 0;
   state.room = payload.new;
 
   // Only reset superpower interaction state when the term or game status changes,
@@ -633,6 +645,30 @@ async function handleRoomChange(payload) {
     state.replaceCharIndex = null;
     state.swapMode = false;
     state.swapFirstIndex = null;
+  }
+
+  // Phone-side polish triggers (M5/H1/H2). Hub doesn't render the phone num-grid
+  // or the per-player turn entrance, so these are gated on !state.isHub.
+  if (!state.isHub) {
+    // M5 — empty grid → results loaded: stagger fade-in for filled num-cells
+    const newResultsLen = state.room.search_results?.length || 0;
+    if (oldResultsLen === 0 && newResultsLen > 0) {
+      state._justLoadedCells = true;
+      setTimeout(() => { state._justLoadedCells = false; debouncedRender(); }, 250);
+    }
+    // H1 — turn becomes mine (turns 2+; turn 1 covered by showView hook)
+    if (oldPlayerIndex !== undefined && state.room.current_player_index !== oldPlayerIndex) {
+      const myIndex = state.room.player_order?.indexOf(state.playerId);
+      if (myIndex >= 0 && state.room.current_player_index === myIndex) {
+        state._turnJustStartedForMe = true;
+        setTimeout(() => { state._turnJustStartedForMe = false; debouncedRender(); }, 1400);
+      }
+    }
+    // H2 — search term changed: replay slot-cell reveal
+    if (oldTerm !== state.room.current_search_term && state.room.current_search_term) {
+      state._termJustRevealed = true;
+      setTimeout(() => { state._termJustRevealed = false; debouncedRender(); }, 500);
+    }
   }
 
   if (oldStatus !== state.room.status) {
@@ -667,8 +703,18 @@ async function handlePlayerChange(payload) {
     }
   } else if (payload.eventType === 'UPDATE') {
     const idx = state.players.findIndex(p => p.id === payload.new.id);
+    const wasReady = state.players[idx]?.ready;
     if (idx >= 0) state.players[idx] = payload.new;
     else state.players.push(payload.new);
+    // N1 — ready celebration: fire on false → true, skip own player (their tap
+    // already gives tactile feedback via the Ready button itself).
+    if (!wasReady && payload.new.ready === true && payload.new.id !== state.playerId) {
+      state._justReadiedIds.add(payload.new.id);
+      setTimeout(() => {
+        state._justReadiedIds.delete(payload.new.id);
+        debouncedRender();
+      }, 600);
+    }
     if (state._showingCountdown && !state.isProcessing && !state.players.every(p => p.ready)) {
       abortCountdown();
     }
@@ -847,6 +893,25 @@ function showView(name) {
 
   state.currentView = name;
   render();
+
+  // H1 — turn-1 entrance: handleRoomChange's index-change check doesn't fire
+  // for turn 1 (undefined → 0 happens via showView, not a room update).
+  if (name === 'game' && !state.isHub && state.room?.current_player_index !== undefined) {
+    const myIndex = state.room.player_order?.indexOf(state.playerId);
+    if (myIndex >= 0 && state.room.current_player_index === myIndex && !state._turnJustStartedForMe) {
+      state._turnJustStartedForMe = true;
+      setTimeout(() => { state._turnJustStartedForMe = false; debouncedRender(); }, 1400);
+    }
+  }
+
+  // N3 — results-announcement bloom: run-once per results-view mount.
+  if (name === 'results' && !state._resultsAnimated) {
+    setTimeout(() => { state._resultsAnimated = true; }, 1400);
+  }
+  // Reset for the next results view when leaving (lobby or new round).
+  if (name === 'lobby' || name === 'game') {
+    state._resultsAnimated = false;
+  }
 
   // When hub enters game view, trigger the first search
   // (skip during the curtain — the curtain's tail kicks off the search itself)
