@@ -1873,6 +1873,10 @@ input[type="text"]:focus { border-color: var(--red); }
   pointer-events: none;
   z-index: 100;
   opacity: 0;
+  background: rgba(13, 13, 15, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: opacity 0.3s ease;
 }
 .hub-overlay.is-active { opacity: 1; }
 
@@ -2010,21 +2014,3 @@ input[type="text"]:focus { border-color: var(--red); }
   to   { opacity: 0; transform: translateY(120%); }
 }
 
-/* --- Step 1.4 — Reduced-motion overrides --- */
-@media (prefers-reduced-motion: reduce) {
-  .hub-countdown-num,
-  .hub-countdown-num--go { animation: countdownReducedFade 0.6s ease both !important; }
-  @keyframes countdownReducedFade { 0% { opacity: 0; } 30%, 70% { opacity: 1; } 100% { opacity: 0; } }
-  .hub-curtain { animation: curtainReducedFade 0.6s ease both !important; }
-  @keyframes curtainReducedFade { 0% { opacity: 0; } 30%, 70% { opacity: 1; } 100% { opacity: 0; } }
-  .hub-player-item[data-newly-joined="true"] {
-    animation: playerJoinReduced 0.4s ease both !important;
-  }
-  @keyframes playerJoinReduced { from { opacity: 0; } to { opacity: 1; } }
-  .hub-join-banner {
-    animation: joinBannerReducedIn 0.3s ease forwards,
-               joinBannerReducedOut 0.3s 1.7s ease forwards !important;
-  }
-  @keyframes joinBannerReducedIn { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes joinBannerReducedOut { from { opacity: 1; } to { opacity: 0; } }
-}

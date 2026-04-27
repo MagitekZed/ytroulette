@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=26';
-import * as Hub from './hub.js?v=26';
+import * as UI from './ui.js?v=27';
+import * as Hub from './hub.js?v=27';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -22,7 +22,7 @@ const EMOJI_AVATARS = ['🎮','🦄','🚀','🐙','🍕','👻','🎯','🦖','
 const DEFAULT_WIN_SCORE = 3;
 const TERM_LENGTH = 4;
 
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reducedMotion = () => false;
 
 // ============================================================
 // STATE
