@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=35';
-import * as Hub from './hub.js?v=35';
+import * as UI from './ui.js?v=36';
+import * as Hub from './hub.js?v=36';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -60,6 +60,9 @@ const state = {
   _turnJustStartedForMe: false,
   _justReadiedIds: new Set(),
   _resultsAnimated: false,
+  _showingTurnBanner: false,
+  _turnBannerTimeout: null,
+  _connStatus: 'ok',
 };
 
 // Expose state for UI rendering
@@ -146,7 +149,7 @@ function setBanner(html, modifierClass) {
 function clearBanner() {
   const el = document.getElementById('hub-banner');
   if (!el) return;
-  el.classList.remove('is-active', 'hub-banner--join');
+  el.classList.remove('is-active', 'hub-banner--join', 'hub-banner--turn');
   el.innerHTML = '';
 }
 
@@ -326,6 +329,37 @@ function runJoinBanner() {
   }, 2300);
 }
 
+// --- Turn-change banner (H1) ---
+function runTurnBanner(player, color) {
+  if (!player) return;
+  const escName = (s) => {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+  };
+  state._showingTurnBanner = true;
+  setBanner(`
+    <div class="hub-turn-banner" style="--player-color:${color}">
+      <span class="hub-turn-banner-label">UP NEXT</span>
+      <span class="hub-turn-banner-name">${escName(player.name)}</span>
+    </div>
+  `, 'hub-banner--turn');
+  state._turnBannerTimeout = setTimeout(() => {
+    state._turnBannerTimeout = null;
+    state._showingTurnBanner = false;
+    clearBanner();
+    // Tail call: kick off triggerSearch now that the banner is done.
+    // While the banner was up, the M1 optimistic flip was suppressed and
+    // triggerSearch was deferred — fire it here. triggerSearch is a no-op if
+    // already searching, and does its own optimistic 'searching' flip otherwise.
+    if (state.isHub && state.room?.status === 'playing'
+        && (state.room?.playback_status === 'idle' || state.room?.playback_status === 'searching')
+        && !state.isSearching) {
+      triggerSearch();
+    }
+  }, 1320);
+}
+
 // ============================================================
 // INIT
 // ============================================================
@@ -347,6 +381,15 @@ async function init() {
   ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
     document.addEventListener(ev, syncFullscreenButton)
   );
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.roomCode && state.currentView !== 'home') {
+      forceReconcile();
+    }
+  });
+  window.addEventListener('online', () => {
+    if (state.roomCode && state.currentView !== 'home') forceReconcile();
+  });
 
   const savedRoom = localStorage.getItem('yt_room_code');
   const savedName = localStorage.getItem('yt_player_name');
@@ -436,6 +479,9 @@ function clearSession() {
   state._turnJustStartedForMe = false;
   state._justReadiedIds.clear();
   state._resultsAnimated = false;
+  state._showingTurnBanner = false;
+  if (state._turnBannerTimeout) { clearTimeout(state._turnBannerTimeout); state._turnBannerTimeout = null; }
+  state._connStatus = 'ok';
   clearOverlay();
   clearBanner();
   if (state.channel) {
@@ -609,6 +655,48 @@ async function loadRoom(roomCode) {
 }
 
 // ============================================================
+// RECONNECT (Concern A)
+// ============================================================
+function setConnStatus(status) {
+  if (state._connStatus === status) return;
+  state._connStatus = status;
+  const host = document.getElementById('conn-pill-host');
+  if (!host) return;
+  if (status === 'reconnecting') {
+    host.innerHTML = '<div class="conn-pill conn-pill--reconnecting">⟳ Reconnecting...</div>';
+  } else {
+    host.innerHTML = '';
+  }
+}
+
+async function forceReconcile() {
+  if (!state.roomCode) return;
+  setConnStatus('reconnecting');
+  try {
+    await loadRoom(state.roomCode);
+    if (state.room) {
+      const targetView = viewForStatus(state.room.status);
+      if (state.currentView !== targetView) {
+        showView(targetView);
+      } else {
+        debouncedRender();
+      }
+    } else {
+      // Room ended while away
+      toast('The room ended while you were away.', 'info');
+      clearSession();
+      showView('home');
+      return;
+    }
+    if (!state.channel) subscribeToRoom(state.roomCode);
+    setConnStatus('ok');
+  } catch (err) {
+    console.error('Reconcile failed:', err);
+    // Leave _connStatus as 'reconnecting'; next attempt will retry
+  }
+}
+
+// ============================================================
 // REAL-TIME SUBSCRIPTIONS
 // ============================================================
 function subscribeToRoom(roomCode) {
@@ -623,7 +711,12 @@ function subscribeToRoom(roomCode) {
       event: '*', schema: 'public', table: 'yt_players',
       filter: `room_code=eq.${roomCode}`,
     }, handlePlayerChange)
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') setConnStatus('ok');
+      else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        setConnStatus('reconnecting');
+      }
+    });
 }
 
 async function handleRoomChange(payload) {
@@ -675,6 +768,22 @@ async function handleRoomChange(payload) {
     }
   }
 
+  // H1 — hub turn-change banner (turns 2+; turn 1 owned by curtain)
+  if (state.isHub
+      && oldStatus === state.room.status
+      && oldStatus === 'playing'
+      && oldPlayerIndex !== undefined
+      && state.room.current_player_index !== oldPlayerIndex
+      && !state._showingCurtain
+      && !state._showingCountdown) {
+    const nextId = state.room.player_order?.[state.room.current_player_index];
+    const nextPlayer = state.players.find(p => p.id === nextId);
+    if (nextPlayer) {
+      const color = UI.getPlayerColor(nextId);
+      runTurnBanner(nextPlayer, color);
+    }
+  }
+
   if (oldStatus !== state.room.status) {
     state.isProcessing = false;
     // Always hide the YouTube player when status changes (e.g., playing → voting)
@@ -686,11 +795,13 @@ async function handleRoomChange(payload) {
     // Search term changed (superpower used / new turn) — re-search takes priority.
     // M1: optimistically flip to 'searching' so morphdom doesn't paint an empty
     // grid frame between the term change and triggerSearch's own optimistic flip.
-    if (state.room.playback_status === 'idle') {
+    // H1 coordination: while the turn banner is up, suppress the optimistic flip
+    // AND defer triggerSearch — banner's setTimeout tail fires triggerSearch.
+    if (state.room.playback_status === 'idle' && !state._showingTurnBanner) {
       state.room.playback_status = 'searching';
       render();
     }
-    await triggerSearch();
+    if (!state._showingTurnBanner) await triggerSearch();
   } else if (state.isHub && oldPlayback !== state.room.playback_status) {
     handleHubPlaybackChange();
   } else {
