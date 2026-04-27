@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=44';
-import * as Hub from './hub.js?v=44';
+import * as UI from './ui.js?v=45';
+import * as Hub from './hub.js?v=45';
 
 // ============================================================
 // SUPABASE CLIENT
