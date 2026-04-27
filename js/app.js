@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=15';
-import * as Hub from './hub.js?v=15';
+import * as UI from './ui.js?v=16';
+import * as Hub from './hub.js?v=16';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -40,6 +40,7 @@ const state = {
   isSearching: false,     // YouTube search in progress
   confirmLeave: false,    // Hub leave confirmation dialog
   _pollInterval: null,    // Handle for the 2s poll fallback
+  _lastTalliedRound: null, // Per-round dedupe token for tallyAndAdvance (anti double-score)
 };
 
 // Expose state for UI rendering
@@ -135,6 +136,7 @@ function clearSession() {
   state.swapFirstIndex = null;
   state.isSearching = false;
   state.isProcessing = false;
+  state._lastTalliedRound = null;
   if (state.channel) {
     db.removeChannel(state.channel);
     state.channel = null;
@@ -577,7 +579,7 @@ function render() {
     const canvas = document.getElementById('hub-qr');
     if (canvas && canvas.dataset.code !== state.roomCode && window.QRious) {
       const url = `${location.origin}${location.pathname}?join=${state.roomCode}`;
-      new window.QRious({ element: canvas, value: url, size: 180, padding: 8, background: 'white', foreground: 'black' });
+      new window.QRious({ element: canvas, value: url, size: 280, background: 'white', foreground: 'black' });
       canvas.dataset.code = state.roomCode;
     }
   }
@@ -812,7 +814,15 @@ async function castVote(forPlayerId) {
 }
 
 async function tallyAndAdvance() {
-  if (state.isProcessing) return;
+  // Per-round token guards against the realtime echo race: after Call #1 writes
+  // the score + status flip, the score-update echo can arrive back at the host
+  // AFTER `isProcessing` has been released by the finally but BEFORE the room
+  // status echo flips local state.room.status to 'results'. Without this token,
+  // Call #2 would re-enter, re-tally the same round, and double the score.
+  // Round number alone disambiguates: nextRound increments it, so a stale token
+  // from a prior round naturally fails the equality check.
+  const round = state.room?.round;
+  if (state.isProcessing || (round != null && state._lastTalliedRound === round)) return;
   state.isProcessing = true;
   try {
     const { data: freshPlayers } = await db.from('yt_players').select().eq('room_code', state.roomCode);
@@ -829,6 +839,8 @@ async function tallyAndAdvance() {
           .eq('id', winnerId).eq('room_code', state.roomCode);
       }
     }
+
+    state._lastTalliedRound = round;
 
     await new Promise(r => setTimeout(r, 300));
 

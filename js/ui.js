@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=15';
+import { formatDuration } from './hub.js?v=16';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -595,6 +595,9 @@ export function renderHubGame(state) {
   // Selecting — show thumbnail grid
   const cellCount = Math.max(results.length, 1);
   const cols = results.length <= 4 ? 2 : results.length <= 6 ? 3 : results.length <= 12 ? 4 : 5;
+  const rows = Math.ceil(cellCount / cols);
+  // Grid AR = (cols × 16) / (rows × 9) — keeps each 1fr cell at 16:9 while the grid fills available space.
+  const gridAspect = `${cols * 16} / ${rows * 9}`;
   return `
     <div class="hub-layout">
       <div class="hub-top-bar">
@@ -613,7 +616,7 @@ export function renderHubGame(state) {
         </div>
       </div>
       <div class="hub-main" style="--active-color:${getPlayerColor(activePlayerId || '')}">
-        <div class="hub-grid" style="grid-template-columns:repeat(${cols}, 1fr)">
+        <div class="hub-grid" style="grid-template-columns:repeat(${cols}, 1fr); aspect-ratio:${gridAspect}">
           ${Array.from({length: cellCount}, (_, i) => {
             const video = results[i];
             if (!video) return '';
