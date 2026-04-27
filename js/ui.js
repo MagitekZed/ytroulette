@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=11';
+import { formatDuration } from './hub.js?v=14';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -186,6 +186,21 @@ function renderPlayerHubControls(state, playbackStatus) {
   const me = state.players.find(p => p.id === state.playerId);
   const results = state.room?.search_results || [];
 
+  // Search failed: hub explicitly set status to 'search_failed'.
+  // Surface a clear retry path via superpowers (the only way the active player can recover).
+  if (playbackStatus === 'search_failed' && !state.replaceMode && !state.swapMode) {
+    return `
+      <div class="pick-instructions">
+        <h3 style="color:var(--red);margin-bottom:6px">Search failed.</h3>
+        <p>Try a superpower to change the term, or ask the host to re-search.</p>
+      </div>
+      <div class="superpowers">
+        <button class="btn btn-sm btn-reroll ${me?.has_reroll ? '' : 'btn-superpower-used'}" data-action="reroll">🎲 Reroll</button>
+        <button class="btn btn-sm btn-replace ${me?.has_replace ? '' : 'btn-superpower-used'}" data-action="enter-replace">🔄 Replace</button>
+        <button class="btn btn-sm btn-swap ${me?.has_swap ? '' : 'btn-superpower-used'}" data-action="enter-swap">↔️ Swap</button>
+      </div>`;
+  }
+
   // Show superpowers (only when not playing)
   if (playbackStatus === 'playing') {
     const selectedVideo = results[state.room?.selected_video_index];
@@ -296,12 +311,41 @@ export function renderVoting(state) {
   const me = state.players.find(p => p.id === state.playerId);
   const hasVoted = !!me?.vote_for;
   const playerOrder = state.room?.player_order || [];
+  const inRound = playerOrder.includes(state.playerId);
   // Stable order: use player_order so cards don't shuffle when votes come in
   const voteTargets = playerOrder
     .map(id => state.players.find(p => p.id === id))
     .filter(Boolean);
-  const votedCount = state.players.filter(p => p.vote_for).length;
-  const totalPlayers = state.players.length;
+  const orderSet = new Set(playerOrder);
+  const votedCount = state.players.filter(p => orderSet.has(p.id) && p.vote_for).length;
+  const totalPlayers = playerOrder.length;
+  const { voteCounts } = tallyVotes(state);
+
+  if (!inRound) {
+    return `
+      <div class="voting-view anim-fade-in">
+        <div class="voting-header">
+          <h1>Voting in Progress</h1>
+          <p class="voting-subtitle">You joined mid-round — you'll play next round.</p>
+          <div class="vote-progress">${votedCount}/${totalPlayers} votes in</div>
+        </div>
+        <div class="scrollable-content">
+          ${voteTargets.map(p => {
+            const votes = voteCounts[p.id] || 0;
+            return `
+              <div class="vote-card">
+                <div class="vote-card-player">
+                  <div class="player-avatar" style="background:${getPlayerColor(p.id)};width:36px;height:36px;font-size:0.85rem">${p.name[0].toUpperCase()}</div>
+                  <span class="vote-card-name">${esc(p.name)}</span>
+                </div>
+                <div style="color:var(--text-muted);font-weight:600;font-size:0.85rem">${votes} vote${votes !== 1 ? 's' : ''}</div>
+              </div>`;
+          }).join('')}
+          <p class="waiting-text">You'll join the next round automatically.</p>
+        </div>
+        <button class="btn btn-text" data-action="leave-game">Leave Game</button>
+      </div>`;
+  }
 
   return `
     <div class="voting-view anim-fade-in">
@@ -522,6 +566,25 @@ export function renderHubGame(state) {
           <div class="hub-searching">
             <div class="hub-search-term">${term.split('').map(ch => `<span class="hub-char">${ch}</span>`).join('')}</div>
             <div class="hub-searching-spinner">🔍 Searching YouTube...</div>
+          </div>
+        </div>
+        ${renderHubAdminBar(state)}
+      </div>`;
+  }
+
+  // Search failed
+  if (playbackStatus === 'search_failed') {
+    return `
+      <div class="hub-layout">
+        <div class="hub-top-bar">
+          <span class="hub-game-info">ROUND ${state.room?.round || 1} · TURN ${turnNum}/${totalTurns} · ${esc(activePlayer?.name || '???')}</span>
+          <span class="hub-room-code">ROOM: ${state.roomCode}</span>
+        </div>
+        <div class="hub-main">
+          <div class="hub-stopped-message">
+            <div style="font-size:3rem;margin-bottom:16px">⚠️</div>
+            <h2>Search Failed</h2>
+            <p style="color:var(--text-muted)">${esc(activePlayer?.name || '???')} can use a superpower, or admin can re-search.</p>
           </div>
         </div>
         ${renderHubAdminBar(state)}
@@ -788,7 +851,9 @@ export function renderHostEnded() {
 export function tallyVotes(state) {
   const voteCounts = {};
   let totalVoters = 0;
+  const orderSet = new Set(state.room?.player_order || []);
   state.players.forEach(p => {
+    if (!orderSet.has(p.id)) return;
     if (p.vote_for) {
       totalVoters++;
       // 'none' votes count but don't go toward any player

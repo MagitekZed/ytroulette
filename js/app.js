@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=13';
-import * as Hub from './hub.js?v=13';
+import * as UI from './ui.js?v=14';
+import * as Hub from './hub.js?v=14';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -39,6 +39,7 @@ const state = {
   isProcessing: false,
   isSearching: false,     // YouTube search in progress
   confirmLeave: false,    // Hub leave confirmation dialog
+  _pollInterval: null,    // Handle for the 2s poll fallback
 };
 
 // Expose state for UI rendering
@@ -75,7 +76,7 @@ async function init() {
   }
 
   // Poll every 2s as a reliable fallback
-  setInterval(async () => {
+  state._pollInterval = setInterval(async () => {
     if (!state.roomCode || state.currentView === 'home') return;
     try {
       const oldStatus = state.room?.status;
@@ -167,6 +168,17 @@ async function attemptHubRejoin(roomCode) {
 
     subscribeToRoom(roomCode);
     showView(viewForStatus(room.status));
+
+    // Resume in-flight playback / search after a Hub refresh.
+    // The realtime subscription won't replay the playback_status change that
+    // happened before reload, so we kick the right path manually.
+    const playback = state.room?.playback_status;
+    if (playback === 'playing' && state.room?.selected_video_id) {
+      handleHubPlaybackChange();
+    } else if (playback === 'searching') {
+      triggerSearch();
+    }
+
     return true;
   } catch { return false; }
 }
@@ -425,7 +437,7 @@ async function triggerSearch() {
 
     if (error || !data?.results) {
       toast('YouTube search failed. Try re-searching.', 'error');
-      await db.from('yt_rooms').update({ playback_status: 'idle' })
+      await db.from('yt_rooms').update({ playback_status: 'search_failed' })
         .eq('code', state.roomCode);
       return;
     }
@@ -656,6 +668,9 @@ async function useReplace(charIndex, chosenChar) {
   chars[charIndex] = chosenChar.toUpperCase();
   const newTerm = chars.join('');
 
+  state.replaceMode = false;
+  state.replaceCharIndex = null;
+
   await db.from('yt_rooms').update({
     current_search_term: newTerm,
     playback_status: 'idle', search_results: [], selected_video_index: null, selected_video_id: null,
@@ -663,9 +678,6 @@ async function useReplace(charIndex, chosenChar) {
 
   await db.from('yt_players').update({ has_replace: false })
     .eq('id', state.playerId).eq('room_code', state.roomCode);
-
-  state.replaceMode = false;
-  state.replaceCharIndex = null;
 }
 
 async function useSwap(idx1, idx2) {
@@ -771,6 +783,10 @@ async function finishTurn() {
 // --- Voting & Scoring ---
 
 async function castVote(forPlayerId) {
+  if (!state.room?.player_order?.includes(state.playerId)) {
+    toast('You joined mid-round. You can vote next round.', 'info');
+    return;
+  }
   await db.from('yt_players').update({ vote_for: forPlayerId })
     .eq('id', state.playerId).eq('room_code', state.roomCode);
 }
@@ -1064,7 +1080,10 @@ function setupEventListeners() {
         if (state.swapFirstIndex === null) {
           state.swapFirstIndex = idx;
           render();
-        } else if (state.swapFirstIndex !== idx) {
+        } else if (state.swapFirstIndex === idx) {
+          state.swapFirstIndex = null;
+          render();
+        } else {
           await useSwap(state.swapFirstIndex, idx);
         }
         break;
@@ -1094,7 +1113,9 @@ function setupEventListeners() {
     if (e.target.id === 'replace-char-input' && state.replaceCharIndex !== null) {
       const val = e.target.value;
       if (val.length > 0) {
-        await useReplace(state.replaceCharIndex, val.slice(-1));
+        const idx = state.replaceCharIndex;
+        e.target.value = '';
+        await useReplace(idx, val.slice(-1));
       }
     }
   });
