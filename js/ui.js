@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=45';
+import { formatDuration } from './hub.js?v=46';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -774,7 +774,8 @@ export function renderHubGame(state) {
                 <div class="hub-pick-chip" data-morph-skip="true" style="--player-color:${pickedColor}">
                   <div class="hub-pick-chip-avatar" style="background:${pickedColor}">${avatarContent(activePlayer)}</div>
                   <span class="hub-pick-chip-text">${esc(activePlayer.name).toUpperCase()} PICKED <span class="hub-pick-chip-num" style="color:${pickedColor}">#${i + 1}</span></span>
-                </div>`;
+                </div>
+              `;
             }
             return `
               <div class="hub-thumb${pickedClass}${dimmedClass}" data-thumb-idx="${i}"${dataMorphSkip}${pickedStyle}>

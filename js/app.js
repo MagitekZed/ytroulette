@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=45';
-import * as Hub from './hub.js?v=45';
+import * as UI from './ui.js?v=46';
+import * as Hub from './hub.js?v=46';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -1044,7 +1044,7 @@ function runSelectionThenLaunch() {
     if (!state.roomCode) return;
     state._showingSelection = false;
     runFlipMorph(selectedIdx, videoId);
-  }, 1800);
+  }, 2400);
 }
 
 function runFlipMorph(idx, videoId) {
@@ -1056,13 +1056,13 @@ function runFlipMorph(idx, videoId) {
     return;
   }
 
-  const from = tile.getBoundingClientRect();
-  // Measure target rect by temporarily un-hiding it (still display:none if .hidden)
+  // Temporarily un-hide the wrapper to measure (display:none returns 0×0).
   const wasHidden = target.classList.contains('hidden');
   if (wasHidden) {
     target.style.visibility = 'hidden';
     target.classList.remove('hidden');
   }
+  const from = tile.getBoundingClientRect();
   const to = target.getBoundingClientRect();
   if (wasHidden) {
     target.classList.add('hidden');
@@ -1077,8 +1077,8 @@ function runFlipMorph(idx, videoId) {
   tile.style.width = from.width + 'px';
   tile.style.height = from.height + 'px';
   tile.style.zIndex = '600';
-  tile.style.transition = 'all 420ms cubic-bezier(0.65, 0, 0.35, 1)';
-  tile.style.willChange = 'transform, left, top, width, height';
+  tile.style.transition = 'all 500ms cubic-bezier(0.65, 0, 0.35, 1)';
+  tile.style.willChange = 'transform, left, top, width, height, background-color';
 
   // Force reflow so transition fires from the captured "from" rect
   void tile.offsetWidth;
@@ -1089,20 +1089,36 @@ function runFlipMorph(idx, videoId) {
   tile.style.height = to.height + 'px';
 
   document.querySelector('.hub-grid')?.classList.add('hub-grid--launching');
-
   state._launchingVideo = true;
 
+  // T+500ms: morph done; fade tile to black to mask iframe loading UI
+  setTimeout(() => {
+    if (!state.roomCode || !document.body.contains(tile)) return;
+    tile.classList.add('hub-thumb--blacking');
+    tile.style.transition = 'background-color 250ms ease-out';
+    tile.style.background = '#000';
+  }, 500);
+
+  // T+750ms: black is full — kick off video load behind it
   setTimeout(() => {
     if (!state.roomCode) return;
     Hub.playVideo(videoId);
-  }, 360);
+  }, 750);
 
+  // T+1300ms: start fading the black tile out (iframe should be ready)
+  setTimeout(() => {
+    if (!state.roomCode || !document.body.contains(tile)) return;
+    tile.style.transition = 'opacity 250ms ease-out';
+    tile.style.opacity = '0';
+  }, 1300);
+
+  // T+1550ms: cleanup — strip tile DOM and clear launching state
   state._launchingTimeout = setTimeout(() => {
     state._launchingTimeout = null;
     if (!state.roomCode) return;
     state._launchingVideo = false;
     debouncedRender();
-  }, 450);
+  }, 1550);
 }
 
 // ============================================================
