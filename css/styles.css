@@ -1816,36 +1816,36 @@ input[type="text"]:focus { border-color: var(--red); }
   transition: opacity 360ms linear;
 }
 
-/* The now-playing card — chip cloned, then lifted, scaled, and settled. */
+/* The now-playing card — hidden during slab expansion, fades in at T+840
+   (after the slab has fully filled the screen + a ~200ms breath). The
+   user explicitly wants only the slab visible during expansion, then the
+   imagery + text pops in cleanly. */
 .np-stage .now-playing-card {
   position: absolute;
+  top: 32vh;
+  left: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
   transform-origin: center;
-  transform: translateX(-50%) translateY(0) scale(1);
+  transform: translateX(-50%) translateY(-6vh) scale(0.94);
   filter: blur(0px);
-  opacity: 1;
+  opacity: 0;
   transition:
     filter 280ms cubic-bezier(0.55, 0.085, 0.68, 0.53),
     opacity 280ms cubic-bezier(0.55, 0.085, 0.68, 0.53);
 }
 .np-stage--lifting .now-playing-card {
-  /* Final composition: centered horizontally, avatar at ~32vh from top.
-     The transform supplies the lift + grow; npCardLand keyframe settles. */
-  top: 32vh !important;
-  left: 50% !important;
-  animation: npCardLand 740ms cubic-bezier(0.22, 1, 0.36, 1) 80ms forwards;
+  animation: npCardReveal 380ms cubic-bezier(0.22, 1, 0.36, 1) 840ms forwards;
 }
-@keyframes npCardLand {
-  0% {
-    transform: translateX(-50%) translateY(-6vh) scale(1.18);
+@keyframes npCardReveal {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6vh) scale(0.94);
   }
-  60% {
-    transform: translateX(-50%) translateY(-6vh) scale(1.18);
-  }
-  100% {
+  to {
+    opacity: 1;
     transform: translateX(-50%) translateY(-6vh) scale(1.0);
   }
 }
@@ -1914,17 +1914,17 @@ input[type="text"]:focus { border-color: var(--red); }
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-/* Text rises AFTER the slab is fully expanded (slab finishes at T+640).
-   Beat = ~260ms breath, then text staggers in. Lets the player register
-   "slab fills the screen" cleanly before the title pops up. */
+/* Text staggers fire DURING the tail of the card fade-in (840-1220ms).
+   Card is mostly visible by T+1080 when eyebrow rises, fully by T+1220.
+   Sequence: slab fills → 200ms breath → card pops in → text staggers in. */
 .np-stage--lifting .np-eyebrow {
-  animation: npTextRise 180ms cubic-bezier(0.22, 1, 0.36, 1) 900ms forwards;
+  animation: npTextRise 180ms cubic-bezier(0.22, 1, 0.36, 1) 1080ms forwards;
 }
 .np-stage--lifting .np-title {
-  animation: npTextRise 220ms cubic-bezier(0.22, 1, 0.36, 1) 960ms forwards;
+  animation: npTextRise 220ms cubic-bezier(0.22, 1, 0.36, 1) 1140ms forwards;
 }
 .np-stage--lifting .np-footer {
-  animation: npTextRise 180ms cubic-bezier(0.22, 1, 0.36, 1) 1060ms forwards;
+  animation: npTextRise 180ms cubic-bezier(0.22, 1, 0.36, 1) 1240ms forwards;
 }
 @keyframes npTextRise {
   to {

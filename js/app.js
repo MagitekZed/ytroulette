@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=48';
-import * as Hub from './hub.js?v=48';
+import * as UI from './ui.js?v=49';
+import * as Hub from './hub.js?v=49';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -1066,7 +1066,6 @@ function runFlipMorph(idx, videoId) {
   }
 
   const tileRect = tile.getBoundingClientRect();
-  const chipRect = chip ? chip.getBoundingClientRect() : tileRect;
 
   const activePlayerId = state.room?.player_order?.[state.room.current_player_index];
   const activePlayer = state.players.find(p => p.id === activePlayerId);
@@ -1099,10 +1098,9 @@ function runFlipMorph(idx, videoId) {
 
   const card = document.createElement('div');
   card.className = 'now-playing-card';
-  // Initial position: chip's rect, so the lift starts from where the chip already lives.
-  card.style.top = chipRect.top + 'px';
-  card.style.left = (chipRect.left + chipRect.width / 2) + 'px';
-  card.style.transform = 'translateX(-50%) translateY(0) scale(1)';
+  // No inline positioning — CSS positions the card at its final centered
+  // composition (top: 32vh, left: 50%, translate -50% with -6vh lift) and
+  // keeps it invisible (opacity 0) until the slab finishes expanding.
   card.innerHTML = `
     <div class="np-avatar">${escNP(avatar)}</div>
     <div class="np-eyebrow">${escNP(eyebrow)}</div>
@@ -1129,15 +1127,15 @@ function runFlipMorph(idx, videoId) {
   slab.style.clipPath = 'inset(0 0 0 0 round 0)';
   stage.classList.add('np-stage--lifting');
 
-  // T+2980: dissolve scrim/slab/card to reveal iframe.
-  // Text staggers shifted +240ms (so slab is fully done before title pops),
-  // dissolve trigger shifted to match — preserves the ~1800ms hold.
+  // T+3220: dissolve scrim/slab/card to reveal iframe.
+  // Card now hidden during slab expansion, fades in at T+840-1220, text
+  // staggers settled by T+1420. 1800ms hold → dissolve at T+3220.
   setTimeout(() => {
     if (!state.roomCode || !document.body.contains(stage)) return;
     stage.classList.add('np-stage--dissolving');
-  }, 2980);
+  }, 3220);
 
-  // T+3340: cleanup.
+  // T+3580: cleanup.
   state._launchingTimeout = setTimeout(() => {
     state._launchingTimeout = null;
     if (!state.roomCode) {
@@ -1147,7 +1145,7 @@ function runFlipMorph(idx, videoId) {
     state._launchingVideo = false;
     if (document.body.contains(stage)) stage.remove();
     debouncedRender();
-  }, 3340);
+  }, 3580);
 }
 
 function escNP(s) {
