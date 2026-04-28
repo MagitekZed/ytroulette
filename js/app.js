@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=49';
-import * as Hub from './hub.js?v=49';
+import * as UI from './ui.js?v=50';
+import * as Hub from './hub.js?v=50';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -71,6 +71,8 @@ const state = {
   _selectionTimeout: null,
   _launchingVideo: false,
   _launchingTimeout: null,
+  _showingRoundBanner: false,
+  _roundBannerTimeout: null,
 };
 
 // Expose state for UI rendering
@@ -466,7 +468,7 @@ async function init() {
         if (state.isHub) Hub.stopVideo();
         showView(viewForStatus(state.room.status));
       } else if (state.isHub && !state.isSearching && oldTerm !== state.room?.current_search_term
-                 && !state._showingTurnBanner && !state._showingCurtain && !state._showingCountdown) {
+                 && !state._showingTurnBanner && !state._showingCurtain && !state._showingCountdown && !state._showingRoundBanner) {
         // Term changed (superpower / new turn) — re-search takes priority.
         // Gated on banner/curtain/countdown so the poll can't fire triggerSearch
         // mid-banner; that would anchor searchStartTime early and shorten the
@@ -534,6 +536,8 @@ function clearSession() {
   if (state._selectionTimeout) { clearTimeout(state._selectionTimeout); state._selectionTimeout = null; }
   state._launchingVideo = false;
   if (state._launchingTimeout) { clearTimeout(state._launchingTimeout); state._launchingTimeout = null; }
+  state._showingRoundBanner = false;
+  if (state._roundBannerTimeout) { clearTimeout(state._roundBannerTimeout); state._roundBannerTimeout = null; }
   state._connStatus = 'ok';
   const pillHost = document.getElementById('conn-pill-host');
   if (pillHost) pillHost.innerHTML = '';
@@ -901,6 +905,27 @@ async function handleRoomChange(payload) {
     if (state.isHub) Hub.stopVideo();
     const { data: players } = await db.from('yt_players').select().eq('room_code', state.roomCode);
     if (players) state.players = players;
+
+    // H3 — round-2+ entry beat: results → playing transition gets a "ROUND N / GO!"
+    // overlay. Claim the flag BEFORE showView so its triggerSearch gate fires.
+    // The banner's tail clears the flag and lets the next render kick off.
+    if (state.isHub && oldStatus === 'results' && state.room.status === 'playing') {
+      state._showingRoundBanner = true;
+      setOverlay(`<div class="hub-round-overlay"><div class="hub-round-line">ROUND ${state.room.round}</div><div class="hub-round-go">GO!</div></div>`);
+      state._roundBannerTimeout = setTimeout(() => {
+        state._showingRoundBanner = false;
+        state._roundBannerTimeout = null;
+        clearOverlay();
+        // Tail: kick triggerSearch the same way the turn-banner does, since
+        // showView's triggerSearch was suppressed by the gate.
+        if (state.isHub && state.room?.status === 'playing'
+            && (state.room?.playback_status === 'idle' || state.room?.playback_status === 'searching')
+            && !state.isSearching) {
+          triggerSearch();
+        }
+      }, 2400);
+    }
+
     showView(viewForStatus(state.room.status));
   } else if (state.isHub && !state.isSearching && oldTerm !== state.room.current_search_term) {
     // Search term changed (superpower used / new turn) — re-search takes priority.
@@ -913,11 +938,11 @@ async function handleRoomChange(payload) {
     // ~4s behind them because handleHubPlaybackChange's playback-change
     // branch never fires (we entered the term-change branch first).
     if (oldPlayback === 'playing') Hub.stopVideo();
-    if (state.room.playback_status === 'idle' && !state._showingTurnBanner) {
+    if (state.room.playback_status === 'idle' && !state._showingTurnBanner && !state._showingRoundBanner) {
       state.room.playback_status = 'searching';
       render();
     }
-    if (!state._showingTurnBanner) await triggerSearch();
+    if (!state._showingTurnBanner && !state._showingRoundBanner) await triggerSearch();
   } else if (state.isHub && oldPlayback !== state.room.playback_status) {
     handleHubPlaybackChange();
   } else {
@@ -1296,7 +1321,7 @@ function showView(name) {
 
   // When hub enters game view, trigger the first search
   // (skip during the curtain — the curtain's tail kicks off the search itself)
-  if (state.isHub && name === 'game' && state.room?.playback_status === 'searching' && !state.isSearching && !state._showingCurtain && !state._showingCountdown) {
+  if (state.isHub && name === 'game' && state.room?.playback_status === 'searching' && !state.isSearching && !state._showingCurtain && !state._showingCountdown && !state._showingRoundBanner) {
     triggerSearch();
   }
 
@@ -1358,6 +1383,10 @@ function render() {
   window.morphdom(app, temp, {
     childrenOnly: true,
     onBeforeElUpdated(fromEl, toEl) {
+      // M3: vote-reveal pulse guard. If both fromEl and toEl carry
+      // data-revealed="true", skip the morph so a debouncedRender mid-reveal
+      // doesn't restart the pulse animation on already-animating elements.
+      if (fromEl.dataset && fromEl.dataset.revealed === 'true' && toEl.dataset?.revealed === 'true') return false;
       // Generic morph-skip — any element flagged with data-morph-skip="true"
       // is left alone (JS owns its DOM/textContent lifecycle). Used by the
       // hub video timer (textContent ticked at 250ms by Hub.startTick) and
@@ -1390,7 +1419,7 @@ function render() {
     }
   }
 
-  if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'searching' && !state._showingCurtain && !state._showingCountdown) {
+  if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'searching' && !state._showingCurtain && !state._showingCountdown && !state._showingRoundBanner) {
     // startSlotReveal has its own guards: skips if intervals already running OR
     // if no fresh cells (.hub-char without --rolling/--locked) exist. The HTML
     // emits cells without those classes; JS adds --rolling inside startSlotReveal.
@@ -1754,7 +1783,10 @@ async function tallyAndAdvance() {
 
     state.revealingVotes = true;
     render();
-    await new Promise(r => setTimeout(r, 1500));
+    // 1900ms accommodates the H4 cascade: 6 cards × 200ms stagger + 700ms pulse
+    // = ~1900ms tail. Per pacing principle ("when in doubt, longer wins"),
+    // bumped from 1500 unconditionally so 5+ player games never clip.
+    await new Promise(r => setTimeout(r, 1900));
     if (state.roomCode !== code) return;
 
     await new Promise(r => setTimeout(r, 300));

@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=49';
+import { formatDuration } from './hub.js?v=50';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -830,7 +830,7 @@ export function renderHubVoting(state) {
             // vote count only. The pending strip below the grid is the sole
             // indicator of who has/hasn't voted.
             const countHtml = revealing
-              ? `<div class="hub-vote-count hub-vote-count--reveal">${votes} vote${votes !== 1 ? 's' : ''}</div>`
+              ? `<div class="hub-vote-count hub-vote-count--reveal" data-revealed="true">${votes} vote${votes !== 1 ? 's' : ''}</div>`
               : `<div class="hub-vote-count hub-vote-count--hidden">&nbsp;</div>`;
             return `
               <div class="hub-vote-card">
@@ -850,7 +850,7 @@ export function renderHubVoting(state) {
               <div class="hub-vote-player" style="color:var(--text-muted)">No Winner</div>
               <div class="hub-vote-title">&nbsp;</div>
               ${revealing
-                ? `<div class="hub-vote-count hub-vote-count--reveal">${noneVotes} vote${noneVotes !== 1 ? 's' : ''}</div>`
+                ? `<div class="hub-vote-count hub-vote-count--reveal" data-revealed="true">${noneVotes} vote${noneVotes !== 1 ? 's' : ''}</div>`
                 : `<div class="hub-vote-count hub-vote-count--hidden">&nbsp;</div>`}
             </div>
           </div>

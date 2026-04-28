@@ -2091,13 +2091,21 @@ input[type="text"]:focus { border-color: var(--red); }
   visibility: hidden;
 }
 .hub-vote-count--reveal {
-  animation: voteRevealPulse 1.5s ease-out;
+  animation: voteRevealPulse 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 @keyframes voteRevealPulse {
-  0% { transform: scale(0.8); opacity: 0; }
-  30% { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  0%   { transform: scale(0.7); opacity: 0; }
+  45%  { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1.0); opacity: 1; }
 }
+/* H4: per-card cascade — 200ms stagger so the reveal sweeps across the grid
+   instead of pulsing all-at-once. Up to 6 cards (5 players + No Winner). */
+.hub-vote-grid > .hub-vote-card:nth-child(1) .hub-vote-count--reveal { animation-delay: 200ms; }
+.hub-vote-grid > .hub-vote-card:nth-child(2) .hub-vote-count--reveal { animation-delay: 400ms; }
+.hub-vote-grid > .hub-vote-card:nth-child(3) .hub-vote-count--reveal { animation-delay: 600ms; }
+.hub-vote-grid > .hub-vote-card:nth-child(4) .hub-vote-count--reveal { animation-delay: 800ms; }
+.hub-vote-grid > .hub-vote-card:nth-child(5) .hub-vote-count--reveal { animation-delay: 1000ms; }
+.hub-vote-grid > .hub-vote-card:nth-child(6) .hub-vote-count--reveal { animation-delay: 1200ms; }
 .hub-vote-pending-strip {
   display: flex;
   flex-direction: row;
@@ -3440,6 +3448,49 @@ input[type="text"]:focus { border-color: var(--red); }
   12.5%  { opacity: 1; transform: translateY(0) scale(1.0); }
   87.5%  { opacity: 1; transform: translateY(0) scale(1.0); }
   100%   { opacity: 0; transform: translateY(-24px) scale(0.98); }
+}
+
+/* H3 — Round 2+ entry overlay. Lives inside #hub-overlay (which provides scrim
+   + blur). 2400ms total: 200ms scrim fade-in, 360ms ROUND scale-in (200ms delay),
+   ~1700ms hold, 140ms exit. */
+.hub-round-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  animation: hubRoundOverlayLife 2400ms ease-out forwards;
+}
+.hub-round-line {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.2rem;
+  letter-spacing: 0.4em;
+  color: var(--gold-dim);
+  text-transform: uppercase;
+  animation: hubRoundLineIn 320ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+}
+.hub-round-go {
+  font-family: var(--font-heading);
+  font-weight: 900;
+  font-size: 14rem;
+  line-height: 0.9;
+  color: var(--gold);
+  text-shadow: 0 0 60px var(--gold-glow);
+  animation: hubRoundGoIn 360ms cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both;
+}
+@keyframes hubRoundOverlayLife {
+  0%   { opacity: 0; }
+  8%   { opacity: 1; }
+  94%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes hubRoundLineIn {
+  from { opacity: 0; transform: translateY(8px); letter-spacing: 0.2em; }
+  to   { opacity: 1; transform: translateY(0); letter-spacing: 0.4em; }
+}
+@keyframes hubRoundGoIn {
+  from { opacity: 0; transform: scale(0.4); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 /* Hub video timer pill — overlays the YT wrapper bottom-right */
