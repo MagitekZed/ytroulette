@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=51';
-import * as Hub from './hub.js?v=51';
+import * as UI from './ui.js?v=52';
+import * as Hub from './hub.js?v=52';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -74,6 +74,9 @@ const state = {
   _showingRoundBanner: false,
   _roundBannerTimeout: null,
   _playlistFallbackTimer: null,
+  _videoStartTimeout: null,
+  _showingWinnerBanner: false,
+  _winnerBannerTimeout: null,
 };
 
 // Expose state for UI rendering
@@ -285,7 +288,7 @@ function runCurtain() {
   // (runCountdown is the only one) and just (re)assert the flag here.
   state._showingCurtain = true;
 
-  const activePlayerId = state.room?.player_order?.[0];
+  const activePlayerId = state.room?.player_order?.[state.room?.current_player_index ?? 0];
   const activePlayer = state.players.find(p => p.id === activePlayerId);
   const name = activePlayer?.name || '???';
   const color = activePlayerId ? UI.getPlayerColor(activePlayerId) : 'var(--gold)';
@@ -540,6 +543,9 @@ function clearSession() {
   state._showingRoundBanner = false;
   if (state._roundBannerTimeout) { clearTimeout(state._roundBannerTimeout); state._roundBannerTimeout = null; }
   if (state._playlistFallbackTimer) { clearTimeout(state._playlistFallbackTimer); state._playlistFallbackTimer = null; }
+  if (state._videoStartTimeout) { clearTimeout(state._videoStartTimeout); state._videoStartTimeout = null; }
+  state._showingWinnerBanner = false;
+  if (state._winnerBannerTimeout) { clearTimeout(state._winnerBannerTimeout); state._winnerBannerTimeout = null; }
   state._connStatus = 'ok';
   const pillHost = document.getElementById('conn-pill-host');
   if (pillHost) pillHost.innerHTML = '';
@@ -939,12 +945,13 @@ async function handleRoomChange(payload) {
         state._showingRoundBanner = false;
         state._roundBannerTimeout = null;
         clearOverlay();
-        // Tail: kick triggerSearch the same way the turn-banner does, since
-        // showView's triggerSearch was suppressed by the gate.
+        // Batch H Fix 4 — chain runCurtain off the round banner so round 2+
+        // gets the "First up: [Name]" beat. The curtain's own tail fires
+        // triggerSearch, so no triggerSearch call here (would double-fire).
         if (state.isHub && state.room?.status === 'playing'
             && (state.room?.playback_status === 'idle' || state.room?.playback_status === 'searching')
             && !state.isSearching) {
-          triggerSearch();
+          runCurtain();
         }
       }, 2400);
     }
@@ -1139,12 +1146,16 @@ function runFlipMorph(idx, videoId) {
   const playlistId = state.room?.selected_playlist_id;
 
   if (!tile) {
-    if (playlistId) {
-      armPlaylistFallback(playlistId);
-      Hub.playPlaylist(playlistId);
-    } else {
-      Hub.playVideo(videoId);
-    }
+    state._videoStartTimeout = setTimeout(() => {
+      state._videoStartTimeout = null;
+      if (!state.roomCode) return;
+      if (playlistId) {
+        armPlaylistFallback(playlistId);
+        Hub.playPlaylist(playlistId);
+      } else {
+        Hub.playVideo(videoId);
+      }
+    }, 500);
     return;
   }
 
@@ -1160,15 +1171,22 @@ function runFlipMorph(idx, videoId) {
   const isPlaylist = video?.type === 'playlist';
   const eyebrow = isPlaylist ? 'QUEUEING PLAYLIST' : 'NOW PLAYING';
 
-  // Fire video load IMMEDIATELY at T+0 — iframe loads behind the scrim.
-  // Discriminate: playlists go through native loadPlaylist so the IFrame
-  // auto-skips unplayable items; regular videos take the loadVideoById path.
-  if (playlistId) {
-    armPlaylistFallback(playlistId);
-    Hub.playPlaylist(playlistId);
-  } else {
-    Hub.playVideo(videoId);
-  }
+  // Defer the actual loadVideoById / loadPlaylist by 500ms so YT's 1.5–2.5s
+  // load latency lines up closer to the dissolve at T+3220 instead of leaking
+  // audio during the cinematic hold. The iframe show / scrim setup still
+  // happens at T+0 below to keep the visual transition clean. The playlist
+  // fallback timer arms inside the same setTimeout so it doesn't begin its
+  // 8s countdown 500ms before the playlist actually loads.
+  state._videoStartTimeout = setTimeout(() => {
+    state._videoStartTimeout = null;
+    if (!state.roomCode) return;
+    if (playlistId) {
+      armPlaylistFallback(playlistId);
+      Hub.playPlaylist(playlistId);
+    } else {
+      Hub.playVideo(videoId);
+    }
+  }, 500);
 
   const stage = document.createElement('div');
   stage.className = 'np-stage';
@@ -1386,7 +1404,7 @@ function showView(name) {
 
   // When hub enters game view, trigger the first search
   // (skip during the curtain — the curtain's tail kicks off the search itself)
-  if (state.isHub && name === 'game' && state.room?.playback_status === 'searching' && !state.isSearching && !state._showingCurtain && !state._showingCountdown && !state._showingRoundBanner) {
+  if (state.isHub && name === 'game' && state.room?.playback_status === 'searching' && !state.isSearching && !state._showingCurtain && !state._showingCountdown && !state._showingRoundBanner && !state._showingTurnBanner && !state._showingWinnerBanner) {
     triggerSearch();
   }
 
@@ -1484,7 +1502,7 @@ function render() {
     }
   }
 
-  if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'searching' && !state._showingCurtain && !state._showingCountdown && !state._showingRoundBanner) {
+  if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'searching' && !state._showingCurtain && !state._showingCountdown && !state._showingRoundBanner && !state._showingTurnBanner && !state._showingWinnerBanner) {
     // startSlotReveal has its own guards: skips if intervals already running OR
     // if no fresh cells (.hub-char without --rolling/--locked) exist. The HTML
     // emits cells without those classes; JS adds --rolling inside startSlotReveal.
@@ -1862,13 +1880,53 @@ async function tallyAndAdvance() {
     await new Promise(r => setTimeout(r, 1900));
     if (state.roomCode !== code) return;
 
-    await new Promise(r => setTimeout(r, 300));
-    if (state.roomCode !== code) return;
-
     // Pattern 6: clear render-only flag in its tight scope, BEFORE the room
     // status write — so a slow room-status echo can't mount the results view
     // while revealingVotes is still true (which would flash vote-reveal styling).
     state.revealingVotes = false;
+
+    // Batch H Fix 3 — WINNER overlay between vote cascade and scoreboard.
+    // Mirrors the round-banner timing (2400ms) for project consistency.
+    // Reuses tallyVotes' winner determination (winnerId null = tie / no-majority
+    // / "No Winner" wins). Unanimous bonus matches the score-write logic above.
+    if (state.isHub) {
+      state._showingWinnerBanner = true;
+      let overlayHtml;
+      if (winnerId) {
+        const winner = state.players.find(p => p.id === winnerId);
+        const winnerName = winner?.name || '???';
+        const winnerColor = UI.getPlayerColor(winnerId);
+        const points = (isUnanimous && state.players.length >= 3) ? 2 : 1;
+        const pointsLine = (points === 2)
+          ? '+2 POINTS &middot; UNANIMOUS'
+          : '+1 POINT';
+        const escWB = (s) => {
+          const div = document.createElement('div');
+          div.textContent = String(s);
+          return div.innerHTML;
+        };
+        overlayHtml = `<div class="hub-winner-overlay">
+          <div class="hub-winner-eyebrow">WINNER</div>
+          <div class="hub-winner-name" style="color:${winnerColor}">${escWB(winnerName)}</div>
+          <div class="hub-winner-points">${pointsLine}</div>
+        </div>`;
+      } else {
+        overlayHtml = `<div class="hub-winner-overlay">
+          <div class="hub-winner-eyebrow">NO WINNER</div>
+          <div class="hub-winner-name" style="color:var(--text-muted)">TIE</div>
+        </div>`;
+      }
+      setOverlay(overlayHtml);
+      await new Promise(r => {
+        state._winnerBannerTimeout = setTimeout(() => {
+          state._winnerBannerTimeout = null;
+          r();
+        }, 2400);
+      });
+      if (state.roomCode !== code) return;
+      state._showingWinnerBanner = false;
+      clearOverlay();
+    }
 
     const { data: updated } = await db.from('yt_players').select().eq('room_code', code);
     if (state.roomCode !== code) return;
