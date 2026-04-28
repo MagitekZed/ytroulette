@@ -3563,6 +3563,37 @@ input[type="text"]:focus { border-color: var(--red); }
   color: var(--text-muted);
 }
 
+/* Playlist fallback — unplayable tile (Hub) */
+.hub-thumb--unplayable {
+  opacity: 0.3;
+  filter: grayscale(1);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.hub-thumb--unplayable::after {
+  content: 'UNAVAILABLE';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: var(--text-muted);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 2px;
+  padding: 6px 14px;
+  border-radius: 4px;
+  z-index: 5;
+}
+/* Phone-side num-cell mirror */
+.num-cell-unplayable {
+  opacity: 0.3;
+  filter: grayscale(1);
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
 /* Hub-side skip tally chip in admin bar */
 .hub-skip-tally {
   margin-right: auto;

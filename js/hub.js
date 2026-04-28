@@ -8,6 +8,7 @@ let player = null;
 let playerReady = false;
 let onVideoEndCallback = null;
 let pendingVideoId = null;
+let pendingPlaylistId = null;
 let initAttempted = false;
 let onFirstPlayCallback = null;
 let firstPlayFired = false;
@@ -91,7 +92,11 @@ function createPlayer() {
       onReady: () => {
         console.log('YouTube player ready');
         playerReady = true;
-        if (pendingVideoId) {
+        if (pendingPlaylistId) {
+          const list = pendingPlaylistId;
+          pendingPlaylistId = null;
+          playPlaylist(list);
+        } else if (pendingVideoId) {
           const vid = pendingVideoId;
           pendingVideoId = null;
           playVideo(vid);
@@ -145,6 +150,8 @@ export function hidePlayer() {
 export function playVideo(videoId) {
   if (!videoId) return;
   firstPlayFired = false;
+  // Clear any queued playlist so the two paths don't trample.
+  pendingPlaylistId = null;
   resetTimer();
 
   if (!player || !playerReady) {
@@ -169,9 +176,38 @@ export function playVideo(videoId) {
   }
 }
 
+// Play a playlist by ID — IFrame skips unplayable items automatically.
+export function playPlaylist(playlistId) {
+  if (!playlistId) return;
+  firstPlayFired = false;
+  pendingVideoId = null;
+  resetTimer();
+
+  if (!player || !playerReady) {
+    pendingPlaylistId = playlistId;
+    return;
+  }
+
+  showPlayer();
+  try {
+    player.loadPlaylist({ list: playlistId, listType: 'playlist', index: 0 });
+    pendingPlaylistId = null;
+  } catch (err) {
+    console.error('Failed to load playlist:', err);
+  }
+}
+
+// Returns the actually-playing video's data — used by the first-play callback
+// to capture the real videoId when a playlist auto-skips unplayable items.
+export function getCurrentVideoData() {
+  if (!player || !playerReady) return null;
+  try { return player.getVideoData?.(); } catch { return null; }
+}
+
 // Stop playback
 export function stopVideo() {
   pendingVideoId = null;
+  pendingPlaylistId = null;
   resetTimer();
   hidePlayer();
 }
@@ -179,6 +215,7 @@ export function stopVideo() {
 // Destroy the player instance
 export function destroyPlayer() {
   pendingVideoId = null;
+  pendingPlaylistId = null;
   initAttempted = false;
   resetTimer();
   hidePlayer();

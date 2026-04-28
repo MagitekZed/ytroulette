@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=50';
-import * as Hub from './hub.js?v=50';
+import * as UI from './ui.js?v=51';
+import * as Hub from './hub.js?v=51';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -73,6 +73,7 @@ const state = {
   _launchingTimeout: null,
   _showingRoundBanner: false,
   _roundBannerTimeout: null,
+  _playlistFallbackTimer: null,
 };
 
 // Expose state for UI rendering
@@ -538,6 +539,7 @@ function clearSession() {
   if (state._launchingTimeout) { clearTimeout(state._launchingTimeout); state._launchingTimeout = null; }
   state._showingRoundBanner = false;
   if (state._roundBannerTimeout) { clearTimeout(state._roundBannerTimeout); state._roundBannerTimeout = null; }
+  if (state._playlistFallbackTimer) { clearTimeout(state._playlistFallbackTimer); state._playlistFallbackTimer = null; }
   state._connStatus = 'ok';
   const pillHost = document.getElementById('conn-pill-host');
   if (pillHost) pillHost.innerHTML = '';
@@ -591,8 +593,21 @@ async function attemptHubRejoin(roomCode) {
     });
     Hub.setFirstPlayCallback(async () => {
       if (!state.isHub || !state.roomCode) return;
-      await db.from('yt_rooms').update({ video_started_at: new Date().toISOString() })
-        .eq('code', state.roomCode);
+      // The IFrame fired first-play — clear the all-unplayable fallback timer
+      // (we made it; it didn't time out).
+      if (state._playlistFallbackTimer) {
+        clearTimeout(state._playlistFallbackTimer);
+        state._playlistFallbackTimer = null;
+      }
+      const updates = { video_started_at: new Date().toISOString() };
+      // For playlists, capture the actually-playing video's id so the voting
+      // view (and skip-vote attribution) reads the right id rather than the
+      // seed first-item id which may have been auto-skipped.
+      if (state.room?.selected_playlist_id) {
+        const data = Hub.getCurrentVideoData?.() || {};
+        if (data?.video_id) updates.selected_video_id = data.video_id;
+      }
+      await db.from('yt_rooms').update(updates).eq('code', state.roomCode);
     });
 
     subscribeToRoom(roomCode);
@@ -602,7 +617,7 @@ async function attemptHubRejoin(roomCode) {
     // The realtime subscription won't replay the playback_status change that
     // happened before reload, so we kick the right path manually.
     const playback = state.room?.playback_status;
-    if (playback === 'playing' && state.room?.selected_video_id) {
+    if (playback === 'playing' && (state.room?.selected_video_id || state.room?.selected_playlist_id)) {
       handleHubPlaybackChange();
     } else if (playback === 'searching') {
       triggerSearch();
@@ -683,8 +698,16 @@ async function createHubRoom(winScore) {
   });
   Hub.setFirstPlayCallback(async () => {
     if (!state.isHub || !state.roomCode) return;
-    await db.from('yt_rooms').update({ video_started_at: new Date().toISOString() })
-      .eq('code', state.roomCode);
+    if (state._playlistFallbackTimer) {
+      clearTimeout(state._playlistFallbackTimer);
+      state._playlistFallbackTimer = null;
+    }
+    const updates = { video_started_at: new Date().toISOString() };
+    if (state.room?.selected_playlist_id) {
+      const data = Hub.getCurrentVideoData?.() || {};
+      if (data?.video_id) updates.selected_video_id = data.video_id;
+    }
+    await db.from('yt_rooms').update(updates).eq('code', state.roomCode);
   });
 
   await loadRoom(code);
@@ -1072,6 +1095,35 @@ function runSelectionThenLaunch() {
   }, 3000);
 }
 
+// 8s fallback: if Hub.playPlaylist is called but the IFrame's first-play
+// event never fires (every item unplayable), mark the picked tile unplayable
+// and revert to the selecting view so the active player can pick again.
+// Cleared by the first-play callback when it actually fires.
+function armPlaylistFallback(playlistId) {
+  if (state._playlistFallbackTimer) {
+    clearTimeout(state._playlistFallbackTimer);
+    state._playlistFallbackTimer = null;
+  }
+  state._playlistFallbackTimer = setTimeout(async () => {
+    state._playlistFallbackTimer = null;
+    if (!state.roomCode) return;
+    if (state.room?.playback_status !== 'playing' || state.room?.selected_playlist_id !== playlistId) return;
+    toast('Playlist unplayable. Pick another.', 'error');
+    const results = [...(state.room.search_results || [])];
+    const idx = state.room.selected_video_index;
+    if (idx != null && results[idx]) {
+      results[idx] = { ...results[idx], unplayable: true };
+    }
+    Hub.stopVideo();
+    await db.from('yt_rooms').update({
+      playback_status: 'selecting',
+      selected_video_id: null,
+      selected_playlist_id: null,
+      search_results: results,
+    }).eq('code', state.roomCode);
+  }, 8000);
+}
+
 // ============================================================
 // STUDIO CARD LIFT — selection-to-video transition
 // ------------------------------------------------------------
@@ -1084,9 +1136,15 @@ function runSelectionThenLaunch() {
 function runFlipMorph(idx, videoId) {
   const tile = document.querySelector(`.hub-thumb[data-thumb-idx="${idx}"]`);
   const chip = tile?.querySelector('.hub-pick-chip');
+  const playlistId = state.room?.selected_playlist_id;
 
   if (!tile) {
-    Hub.playVideo(videoId);
+    if (playlistId) {
+      armPlaylistFallback(playlistId);
+      Hub.playPlaylist(playlistId);
+    } else {
+      Hub.playVideo(videoId);
+    }
     return;
   }
 
@@ -1103,7 +1161,14 @@ function runFlipMorph(idx, videoId) {
   const eyebrow = isPlaylist ? 'QUEUEING PLAYLIST' : 'NOW PLAYING';
 
   // Fire video load IMMEDIATELY at T+0 — iframe loads behind the scrim.
-  Hub.playVideo(videoId);
+  // Discriminate: playlists go through native loadPlaylist so the IFrame
+  // auto-skips unplayable items; regular videos take the loadVideoById path.
+  if (playlistId) {
+    armPlaylistFallback(playlistId);
+    Hub.playPlaylist(playlistId);
+  } else {
+    Hub.playVideo(videoId);
+  }
 
   const stage = document.createElement('div');
   stage.className = 'np-stage';
@@ -1637,7 +1702,8 @@ async function selectVideo(index) {
   const me = getMe();
   if (!me) return;
 
-  const videoId = video.type === 'playlist' ? video.firstVideoId : video.videoId;
+  const isPlaylist = video.type === 'playlist';
+  const videoId = isPlaylist ? video.firstVideoId : video.videoId;
 
   // New video → prior thumbs_down votes are stale. Sweep the player table
   // BEFORE the room update so the gate-on-new-video reads clean votes.
@@ -1645,13 +1711,19 @@ async function selectVideo(index) {
   // populate it when the new video actually plays.
   await db.from('yt_players').update({ thumbs_down: false }).eq('room_code', state.roomCode);
 
-  // Write A: room (drives the playback transition).
-  const { error: roomErr } = await db.from('yt_rooms').update({
+  // Write A: room (drives the playback transition). For playlists, write
+  // selected_playlist_id so the Hub's runFlipMorph routes through
+  // Hub.playPlaylist (IFrame native skip of unplayable items). selected_video_id
+  // is seeded with the first video; the first-play callback overwrites it with
+  // the actually-playing video id once IFrame settles.
+  const roomUpdates = {
     selected_video_index: index,
     selected_video_id: videoId,
+    selected_playlist_id: isPlaylist ? video.playlistId : null,
     playback_status: 'playing',
     video_started_at: null,
-  }).eq('code', state.roomCode);
+  };
+  const { error: roomErr } = await db.from('yt_rooms').update(roomUpdates).eq('code', state.roomCode);
   if (roomErr) {
     console.error('selectVideo room update failed:', roomErr);
     toast('Failed to start playback. Try again.', 'error');
@@ -1674,6 +1746,7 @@ async function selectVideo(index) {
       await db.from('yt_rooms').update({
         selected_video_index: null,
         selected_video_id: null,
+        selected_playlist_id: null,
         playback_status: 'selecting',
       }).eq('code', state.roomCode);
     } catch (rollbackErr) {

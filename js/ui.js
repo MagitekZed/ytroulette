@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=50';
+import { formatDuration } from './hub.js?v=51';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -324,12 +324,16 @@ function renderPlayerHubControls(state, playbackStatus) {
 // Numbered grid for selecting videos (phone UI)
 function renderNumberGrid(count, state) {
   const justLoaded = state?._justLoadedCells ? ' data-just-loaded="true"' : '';
+  const results = state?.room?.search_results || [];
   let cells = '';
   for (let i = 0; i < 20; i++) {
     const available = i < count;
+    const unplayable = available && !!results[i]?.unplayable;
+    const tappable = available && !unplayable;
     const loadedAttr = available ? justLoaded : '';
-    cells += `<button class="num-cell ${available ? '' : 'num-cell-empty'}"${loadedAttr}
-      ${available ? `data-action="select-video" data-value="${i}"` : 'disabled'}>${i + 1}</button>`;
+    const cls = !available ? 'num-cell-empty' : (unplayable ? 'num-cell-unplayable' : '');
+    cells += `<button class="num-cell ${cls}"${loadedAttr}
+      ${tappable ? `data-action="select-video" data-value="${i}"` : 'disabled'}>${i + 1}</button>`;
   }
   return `<div class="number-grid">${cells}</div>`;
 }
@@ -763,9 +767,11 @@ export function renderHubGame(state) {
             const badge = video.type === 'playlist' ? '<span class="hub-badge-playlist">PLAYLIST</span>' : '';
             const isPicked = state._showingSelection && i === state.room?.selected_video_index;
             const isOthers = state._showingSelection && i !== state.room?.selected_video_index;
+            const isUnplayable = !!video.unplayable;
             const dataMorphSkip = isPicked ? ' data-morph-skip="true"' : '';
             const pickedClass = isPicked ? ' hub-thumb--picked' : '';
             const dimmedClass = isOthers ? ' hub-thumb--others-dimmed' : '';
+            const unplayableClass = isUnplayable ? ' hub-thumb--unplayable' : '';
             const pickedColor = isPicked ? getPlayerColor(activePlayerId || '') : '';
             const pickedStyle = isPicked ? ` style="--player-color:${pickedColor}"` : '';
             let pickChip = '';
@@ -778,7 +784,7 @@ export function renderHubGame(state) {
               `;
             }
             return `
-              <div class="hub-thumb${pickedClass}${dimmedClass}" data-thumb-idx="${i}"${dataMorphSkip}${pickedStyle}>
+              <div class="hub-thumb${pickedClass}${dimmedClass}${unplayableClass}" data-thumb-idx="${i}"${dataMorphSkip}${pickedStyle}>
                 <span class="hub-thumb-num">${i + 1}</span>
                 <img src="${esc(thumb)}" alt="" class="hub-thumb-img" loading="lazy">
                 ${video.type === 'video' && duration ? `<span class="hub-thumb-duration">${duration}</span>` : ''}

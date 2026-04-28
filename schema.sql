@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS yt_rooms (
   search_results JSONB DEFAULT '[]'::JSONB,
   selected_video_index INTEGER,
   selected_video_id TEXT,
+  selected_playlist_id TEXT,
   playback_status TEXT DEFAULT 'idle',
   videos JSONB DEFAULT '[]'::JSONB,
   last_round_winner TEXT,
