@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=47';
+import { formatDuration } from './hub.js?v=48';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
