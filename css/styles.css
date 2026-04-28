@@ -1914,14 +1914,17 @@ input[type="text"]:focus { border-color: var(--red); }
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
+/* Text rises AFTER the slab is fully expanded (slab finishes at T+640).
+   Beat = ~260ms breath, then text staggers in. Lets the player register
+   "slab fills the screen" cleanly before the title pops up. */
 .np-stage--lifting .np-eyebrow {
-  animation: npTextRise 180ms cubic-bezier(0.22, 1, 0.36, 1) 660ms forwards;
+  animation: npTextRise 180ms cubic-bezier(0.22, 1, 0.36, 1) 900ms forwards;
 }
 .np-stage--lifting .np-title {
-  animation: npTextRise 220ms cubic-bezier(0.22, 1, 0.36, 1) 720ms forwards;
+  animation: npTextRise 220ms cubic-bezier(0.22, 1, 0.36, 1) 960ms forwards;
 }
 .np-stage--lifting .np-footer {
-  animation: npTextRise 180ms cubic-bezier(0.22, 1, 0.36, 1) 820ms forwards;
+  animation: npTextRise 180ms cubic-bezier(0.22, 1, 0.36, 1) 1060ms forwards;
 }
 @keyframes npTextRise {
   to {

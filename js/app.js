@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=47';
-import * as Hub from './hub.js?v=47';
+import * as UI from './ui.js?v=48';
+import * as Hub from './hub.js?v=48';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -1129,13 +1129,15 @@ function runFlipMorph(idx, videoId) {
   slab.style.clipPath = 'inset(0 0 0 0 round 0)';
   stage.classList.add('np-stage--lifting');
 
-  // T+2740: dissolve scrim/slab/card to reveal iframe.
+  // T+2980: dissolve scrim/slab/card to reveal iframe.
+  // Text staggers shifted +240ms (so slab is fully done before title pops),
+  // dissolve trigger shifted to match — preserves the ~1800ms hold.
   setTimeout(() => {
     if (!state.roomCode || !document.body.contains(stage)) return;
     stage.classList.add('np-stage--dissolving');
-  }, 2740);
+  }, 2980);
 
-  // T+3100: cleanup.
+  // T+3340: cleanup.
   state._launchingTimeout = setTimeout(() => {
     state._launchingTimeout = null;
     if (!state.roomCode) {
@@ -1145,7 +1147,7 @@ function runFlipMorph(idx, videoId) {
     state._launchingVideo = false;
     if (document.body.contains(stage)) stage.remove();
     debouncedRender();
-  }, 3100);
+  }, 3340);
 }
 
 function escNP(s) {
