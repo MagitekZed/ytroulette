@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=46';
-import * as Hub from './hub.js?v=46';
+import * as UI from './ui.js?v=47';
+import * as Hub from './hub.js?v=47';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -1044,81 +1044,115 @@ function runSelectionThenLaunch() {
     if (!state.roomCode) return;
     state._showingSelection = false;
     runFlipMorph(selectedIdx, videoId);
-  }, 2400);
+  }, 3000);
 }
 
+// ============================================================
+// STUDIO CARD LIFT — selection-to-video transition
+// ------------------------------------------------------------
+// The pick-chip is the kinetic anchor. It detaches from the tile,
+// lifts and grows; the tile collapses into a player-color slab that
+// blooms to fill the screen, settles into a NOW PLAYING placard,
+// holds, then dissolves to reveal the iframe loaded behind it.
+// Total: 940ms entrance + 1800ms hold + 360ms dissolve = 3100ms.
+// ============================================================
 function runFlipMorph(idx, videoId) {
   const tile = document.querySelector(`.hub-thumb[data-thumb-idx="${idx}"]`);
-  const target = document.getElementById('yt-player-wrapper');
+  const chip = tile?.querySelector('.hub-pick-chip');
 
-  if (!tile || !target) {
+  if (!tile) {
     Hub.playVideo(videoId);
     return;
   }
 
-  // Temporarily un-hide the wrapper to measure (display:none returns 0×0).
-  const wasHidden = target.classList.contains('hidden');
-  if (wasHidden) {
-    target.style.visibility = 'hidden';
-    target.classList.remove('hidden');
-  }
-  const from = tile.getBoundingClientRect();
-  const to = target.getBoundingClientRect();
-  if (wasHidden) {
-    target.classList.add('hidden');
-    target.style.visibility = '';
-  }
+  const tileRect = tile.getBoundingClientRect();
+  const chipRect = chip ? chip.getBoundingClientRect() : tileRect;
 
-  tile.classList.remove('hub-thumb--picked');
-  tile.classList.add('hub-thumb--launching');
-  tile.style.position = 'fixed';
-  tile.style.left = from.left + 'px';
-  tile.style.top = from.top + 'px';
-  tile.style.width = from.width + 'px';
-  tile.style.height = from.height + 'px';
-  tile.style.zIndex = '600';
-  tile.style.transition = 'all 500ms cubic-bezier(0.65, 0, 0.35, 1)';
-  tile.style.willChange = 'transform, left, top, width, height, background-color';
+  const activePlayerId = state.room?.player_order?.[state.room.current_player_index];
+  const activePlayer = state.players.find(p => p.id === activePlayerId);
+  const playerName = activePlayer?.name || '???';
+  const avatar = activePlayer?.avatar || (activePlayer?.name?.[0]?.toUpperCase() ?? '?');
+  const color = UI.getPlayerColor(activePlayerId || '');
+  const video = state.room?.search_results?.[idx];
+  const title = video?.title || 'Up Next';
+  const isPlaylist = video?.type === 'playlist';
+  const eyebrow = isPlaylist ? 'QUEUEING PLAYLIST' : 'NOW PLAYING';
 
-  // Force reflow so transition fires from the captured "from" rect
-  void tile.offsetWidth;
+  // Fire video load IMMEDIATELY at T+0 — iframe loads behind the scrim.
+  Hub.playVideo(videoId);
 
-  tile.style.left = to.left + 'px';
-  tile.style.top = to.top + 'px';
-  tile.style.width = to.width + 'px';
-  tile.style.height = to.height + 'px';
+  const stage = document.createElement('div');
+  stage.className = 'np-stage';
+  stage.style.setProperty('--player-color', color);
 
-  document.querySelector('.hub-grid')?.classList.add('hub-grid--launching');
+  const scrim = document.createElement('div');
+  scrim.className = 'np-scrim';
+
+  const slab = document.createElement('div');
+  slab.className = 'np-slab';
+  // Initial clip-path matches the picked tile's rect — slab "is" the tile.
+  const top = Math.max(0, tileRect.top);
+  const right = Math.max(0, window.innerWidth - tileRect.right);
+  const bottom = Math.max(0, window.innerHeight - tileRect.bottom);
+  const left = Math.max(0, tileRect.left);
+  slab.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px round 18px)`;
+
+  const card = document.createElement('div');
+  card.className = 'now-playing-card';
+  // Initial position: chip's rect, so the lift starts from where the chip already lives.
+  card.style.top = chipRect.top + 'px';
+  card.style.left = (chipRect.left + chipRect.width / 2) + 'px';
+  card.style.transform = 'translateX(-50%) translateY(0) scale(1)';
+  card.innerHTML = `
+    <div class="np-avatar">${escNP(avatar)}</div>
+    <div class="np-eyebrow">${escNP(eyebrow)}</div>
+    <div class="np-title">${escNP(title)}</div>
+    <div class="np-footer">#${idx + 1} &middot; ${escNP(playerName)}</div>
+  `;
+
+  stage.appendChild(scrim);
+  stage.appendChild(slab);
+  stage.appendChild(card);
+  document.body.appendChild(stage);
+
   state._launchingVideo = true;
 
-  // T+500ms: morph done; fade tile to black to mask iframe loading UI
-  setTimeout(() => {
-    if (!state.roomCode || !document.body.contains(tile)) return;
-    tile.classList.add('hub-thumb--blacking');
-    tile.style.transition = 'background-color 250ms ease-out';
-    tile.style.background = '#000';
-  }, 500);
+  // Fade out the original chip in-place so the cloned card appears to detach.
+  if (chip) {
+    chip.style.transition = 'opacity 80ms linear';
+    chip.style.opacity = '0';
+  }
 
-  // T+750ms: black is full — kick off video load behind it
-  setTimeout(() => {
-    if (!state.roomCode) return;
-    Hub.playVideo(videoId);
-  }, 750);
+  // Force reflow, then trigger the lift via class.
+  void stage.offsetWidth;
+  // Set the slab's target clip-path now — its CSS transition fires with a 360ms delay.
+  slab.style.clipPath = 'inset(0 0 0 0 round 0)';
+  stage.classList.add('np-stage--lifting');
 
-  // T+1300ms: start fading the black tile out (iframe should be ready)
+  // T+2740: dissolve scrim/slab/card to reveal iframe.
   setTimeout(() => {
-    if (!state.roomCode || !document.body.contains(tile)) return;
-    tile.style.transition = 'opacity 250ms ease-out';
-    tile.style.opacity = '0';
-  }, 1300);
+    if (!state.roomCode || !document.body.contains(stage)) return;
+    stage.classList.add('np-stage--dissolving');
+  }, 2740);
 
-  // T+1550ms: cleanup — strip tile DOM and clear launching state
+  // T+3100: cleanup.
   state._launchingTimeout = setTimeout(() => {
     state._launchingTimeout = null;
-    if (!state.roomCode) return;
+    if (!state.roomCode) {
+      if (document.body.contains(stage)) stage.remove();
+      return;
+    }
     state._launchingVideo = false;
+    if (document.body.contains(stage)) stage.remove();
     debouncedRender();
-  }, 1550);
+  }, 3100);
+}
+
+function escNP(s) {
+  if (s == null) return '';
+  const div = document.createElement('div');
+  div.textContent = String(s);
+  return div.innerHTML;
 }
 
 // ============================================================

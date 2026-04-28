@@ -2,7 +2,7 @@
 
 Read this first when picking up the project in a new session. It captures current state, recent decisions, and the next likely thing to work on.
 
-**Last updated:** 2026-04-26 — Batch D shipped (premium tiles + selection beat + FLIP morph).
+**Last updated:** 2026-04-26 — Studio Card Lift transition replaces FLIP morph (v47).
 
 ---
 
@@ -12,7 +12,7 @@ Read this first when picking up the project in a new session. It captures curren
 - **Stack:** Vanilla JS, no build step. Supabase for realtime + a single Edge Function for the YouTube search. GitHub Pages deploy.
 - **Deploy URL:** `magitekzed.github.io` (root, not a subpath).
 - **Repo:** `https://github.com/MagitekZed/ytroulette`
-- **Current cache-bust:** CSS `?v=46`, JS `?v=46`. Every JS edit bumps this in lockstep across `index.html`, both imports in `js/app.js`, and the import in `js/ui.js`.
+- **Current cache-bust:** CSS `?v=47`, JS `?v=47`. Every JS edit bumps this in lockstep across `index.html`, both imports in `js/app.js`, and the import in `js/ui.js`.
 - **Schema:** `schema.sql` is canonical. Migrations live in `migrations/NNN_name.sql` and are run manually via Supabase SQL Editor.
 
 ---
@@ -37,6 +37,21 @@ Read this first when picking up the project in a new session. It captures curren
 ---
 
 ## Recent work (latest sessions)
+
+### Studio Card Lift transition (completed, v47)
+The FLIP morph + black-bridge approach felt cheap (thumbnail-zoom is the give-away). Replaced with the designer's Studio Card Lift: the pick-chip is the kinetic anchor through the whole transition.
+
+**Choreography (3100ms total, after a 3000ms selection beat):**
+- T+0: `Hub.playVideo` fires; iframe loads behind a black scrim. Pick-chip detaches as a free-floating `.now-playing-card`.
+- T+80–520: LIFT — card scales 1.0→1.18 + lifts -6vh; original chip fades out in place.
+- T+360–640: SLAB BLOOM — clip-path expands a player-color radial slab from the picked tile's rect to fullscreen.
+- T+640–940: PLACARD SETTLE — card scales back to 1.0 at composition. "NOW PLAYING" eyebrow + title + "#N · NAME" footer stagger in.
+- T+940–2740: HOLD (1800ms — user-adjusted from designer's 400ms spec for cinematic breath).
+- T+2740–3100: DISSOLVE — scrim + slab + card fade together; avatar holds 80ms longer.
+
+DOM is built dynamically by `runFlipMorph` (kept the function name; it's a different transition now): `.np-stage` > `.np-scrim` + `.np-slab` + `.now-playing-card`, appended to `body` outside `#app` so morphdom never touches it. Old `.hub-thumb--launching` / `.hub-thumb--blacking` classes and `.hub-grid--launching` styles fully retired.
+
+Selection beat bumped 2400→3000ms so the chip is visible ~2.6s before the lift starts. Total bridge from selection to video: 3000 + 3100 = 6100ms. Long, but per comprehension-over-speed.
 
 ### Batch D — Premium tiles + Selection beat + FLIP morph (completed, v44)
 Three coordinated visual upgrades for the Hub mid-game experience.
