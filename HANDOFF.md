@@ -2,7 +2,11 @@
 
 Read this first when picking up the project in a new session. It captures current state, recent decisions, and the next likely thing to work on.
 
-**Last updated:** 2026-04-28 — through Batch D + Studio Card Lift refinements (v49). Two batches remain: E and G.
+**Last updated:** 2026-04-28 — through Batch H (v52). The original 4-ship roadmap (Batches A–G) is shipped; Batch H closed playtest gaps in the turn flow.
+
+**Canonical flow references** (read these before touching the turn / round / voting flow):
+- **`FLOW.md`** — exhaustive per-phase trace with file:line, every state flag, every animation beat in ms.
+- **`FLOW-OVERVIEW.md`** — one-screen mermaid flowchart of every path through the game with gates and overlaps.
 
 ---
 
@@ -12,7 +16,7 @@ Read this first when picking up the project in a new session. It captures curren
 - **Stack:** Vanilla JS, no build step. Supabase for realtime + a single Edge Function for the YouTube search. GitHub Pages deploy.
 - **Deploy URL:** `magitekzed.github.io` (root, not a subpath).
 - **Repo:** `https://github.com/MagitekZed/ytroulette`
-- **Current cache-bust:** CSS `?v=49`, JS `?v=49`. Every JS edit bumps this in lockstep across `index.html`, both imports in `js/app.js`, and the import in `js/ui.js`.
+- **Current cache-bust:** CSS `?v=52`, JS `?v=52`. Every JS edit bumps this in lockstep across `index.html`, both imports in `js/app.js`, and the import in `js/ui.js`.
 - **Schema:** `schema.sql` is canonical. Migrations live in `migrations/NNN_name.sql` and are run manually via Supabase SQL Editor.
 
 ---
@@ -43,11 +47,47 @@ These live in `~/.claude/projects/.../memory/` and are auto-loaded each session.
 | `supabase/functions/youtube-search/index.ts` | Edge Function. Filters non-embeddable, `#shorts` titles, ≤10s clips. Has a fallback search if the first pass returns <5 videos. |
 | `BACKLOG.md` | Deferred-but-good ideas, with rough scope per item. |
 | `HANDOFF.md` | This file. |
+| `FLOW.md` | Exhaustive game-flow reference — every phase, every state flag, every beat in ms, with file:line. |
+| `FLOW-OVERVIEW.md` | One-screen mermaid flowchart of every path; gates + overlaps tables. |
 | `.claude/launch.json` | Local dev server config (`npx serve .` on port 3000). |
 
 ---
 
 ## Recent work (latest sessions)
+
+### Batch H — Flow polish from playtest (completed, v52)
+Four targeted fixes from a v51 multi-round playtest. One commit, no migration.
+
+- **Fix 1 — Video starts 500ms into card lift, not at T+0.** `Hub.playVideo` / `Hub.playPlaylist` calls inside `runFlipMorph` now wrap in a 500ms `setTimeout` so YT load + buffer overlap with the card-lift hold instead of starting cleanly during it. Audio leak window shrunk from ~1.5–2s to ~0.5–1s. State flag `_videoStartTimeout` cleared in `clearSession`. The 8s playlist fallback timer is armed inside the same setTimeout so its countdown aligns with actual load.
+- **Fix 2 — `_showingTurnBanner` retrofitted into slot-reveal gates.** Pre-existing oversight from Batch B that Batch E almost caught: gates at `showView` (~line 1389) and `render` (~line 1487) check `_showingCurtain` / `_showingCountdown` / `_showingRoundBanner` but missed `_showingTurnBanner`. Slot reveal could kick off behind the turn banner. One-line fix in two spots; mirrors the existing pattern.
+- **Fix 3 — WINNER overlay between vote cascade and scoreboard.** New player-color overlay fires inside `tallyAndAdvance` between the cascade and the `status: 'results'` write. 2400ms total. Shape: eyebrow "WINNER" → big name in player color (text-shadow + drop-shadow) → "+1 POINT" / "+2 POINTS · UNANIMOUS" / "TIE". Unanimous detection: `isUnanimous && state.players.length >= 3` (matches existing scoring logic). `winnerId === null` → TIE branch. New flag `_showingWinnerBanner` + timeout, both reset in `clearSession`. The previous 300ms breath is gone — overlay's intrinsic life owns that gap.
+- **Fix 4 — Round 2+ chains `runCurtain` after the ROUND N / GO! overlay.** Generalized `runCurtain` to read `state.room.player_order[state.room.current_player_index]` instead of hardcoded `[0]`. The Batch E round-banner tail no longer calls `triggerSearch` directly — it now sets `_showingCurtain = true` and runs `runCurtain`, which fires `triggerSearch` from its own tail. Round 2+ now shows: ROUND N (2400ms) → "First up: NAME" curtain (1600ms) → slot reveal.
+
+**Cumulative slot-reveal gate after Batch H** (both call sites): `!state._showingCurtain && !state._showingCountdown && !state._showingRoundBanner && !state._showingTurnBanner && !state._showingWinnerBanner`.
+
+**Cumulative `clearSession` resets added by H:** `_videoStartTimeout`, `_showingWinnerBanner`, `_winnerBannerTimeout`.
+
+### Batch G — Playlist fallback (completed, v51)
+**Migration 004** added `yt_rooms.selected_playlist_id TEXT`. Mirrored in `schema.sql`.
+
+`Hub.playPlaylist` in `js/hub.js` uses native `loadPlaylist({list, listType: 'playlist', index: 0})` — IFrame skips unplayable items automatically. `pendingPlaylistId` queues if player isn't ready; `onReady` flushes; `playVideo` clears the pending so paths don't trample. New `Hub.getCurrentVideoData` exposes `getVideoData()` for capture.
+
+`selectVideo` discriminates on `video.type === 'playlist'`: writes `selected_playlist_id` (and seeds `selected_video_id` with `firstVideoId`), or writes `selected_video_id` and nulls the playlist column. Room write FIRST, then player write (Pattern 1 preserved).
+
+`runFlipMorph` AND `attemptHubRejoin` both branch on `selected_playlist_id`. The first-play callback (registered in `createHubRoom` and `attemptHubRejoin`) extends to capture the actually-playing video id via `getVideoData()` for playlists, so skip-vote / voting view use the right thumbnail.
+
+**8s "all unplayable" fallback timer** (`state._playlistFallbackTimer`) armed inside the playVideo setTimeout. If first-play never fires within 8s, marks the tile `unplayable: true`, resets `playback_status` to `'selecting'`, toasts "Playlist unplayable. Pick another." Cleared inside the first-play callback when it actually fires; cleared in `clearSession`. Unplayable tiles render `.hub-thumb--unplayable` (greyscale + "UNAVAILABLE" overlay) and aren't tappable.
+
+`attemptHubRejoin` resume condition widened from `selected_video_id` to `selected_video_id || selected_playlist_id` so refresh during playlist playback resumes correctly.
+
+### Batch E — Round + Voting polish (completed, v50)
+No migration. Three coordinated additions.
+
+- **H3 — Round 2+ entry overlay.** `_showingRoundBanner` flag + 2400ms ROUND N / GO! overlay fires in `handleRoomChange` on `oldStatus === 'results' && state.room.status === 'playing'`. Gates `triggerSearch` via the flag added to `showView` and `render` slot-reveal gates. Tail kicks `triggerSearch` (later replaced by `runCurtain` chain in Batch H).
+- **H4 — Vote-reveal cascade.** Per-card stagger via CSS `nth-child(N)` `animation-delay` (200ms × card index) on `.hub-vote-count--reveal`. `voteRevealPulse` shortened from 1500ms to 700ms. `tallyAndAdvance` reveal window bumped from 1500ms to 1900ms (longer-wins per pacing).
+- **M3 — Vote-pulse re-trigger guard.** `data-revealed="true"` attribute on the count element + a parallel short-circuit in `onBeforeElUpdated` (placed BEFORE the existing `data-morph-skip` check). Prevents debouncedRender from re-applying the pulse on already-animated elements.
+
+**Final `onBeforeElUpdated` allowlist order** (after Batch E, unchanged through G+H): (1) `data-revealed="true"` on both fromEl and toEl → return false; (2) `data-morph-skip="true"` on fromEl → return false; (3) existing slot-cell guard.
 
 ### Studio Card Lift transition + refinements (completed, v49)
 The FLIP morph + black-bridge approach (Batch D Task 3) felt cheap (thumbnail-zoom is the give-away). Replaced with the designer's **Studio Card Lift**: the picked tile collapses into a player-color slab that blooms to fullscreen, then a "NOW PLAYING" placard pops in.
@@ -141,377 +181,25 @@ Adaptive Hub grid + QR code in lobby + haptic feedback + active-player spotlight
 
 ---
 
-## REMAINING WORK — Batches E and G
+## Roadmap status
 
-These are the two remaining batches from the original 4-ship roadmap. Specs are detailed enough to ship without re-engaging PM — fold the refiner reshapes already noted and execute.
+The original 4-ship roadmap (Batches A–G) is **done**. Batch H closed the playtest gaps that surfaced after E/G landed. From here, work is driven by playtest feedback or BACKLOG items rather than a pre-planned ship sequence.
 
----
-
-### BATCH E — Round + Voting Polish
-
-**Items:** H3 (round-2+ entry overlay), H4 (vote pip cascade), M3 (vote-pulse guard).
-
-**Cache-bust target: `?v=50`.**
-
-**No migration.**
-
-#### H3 — Round 2+ entry beat
-
-**Problem:** When the round ends and `nextRound` flips status from `results` back to `playing`, the Hub jumps directly to the game view. There's no "ROUND 2" announcement — the user has flagged this as the missing turn-transition (round transition) beat.
-
-**Implementation:**
-
-1. **State additions** (in `js/app.js` state object):
-   ```js
-   _showingRoundBanner: false,
-   _roundBannerTimeout: null,
-   ```
-   Reset both in `clearSession`.
-
-2. **Trigger** in `handleRoomChange` (where `oldStatus !== state.room.status` fires):
-   ```js
-   if (state.isHub && oldStatus === 'results' && state.room.status === 'playing') {
-     state._showingRoundBanner = true;
-     setOverlay(`<div class="hub-round-overlay"><div class="hub-round-line">ROUND ${state.room.round}</div><div class="hub-round-go">GO!</div></div>`);
-     state._roundBannerTimeout = setTimeout(() => {
-       state._showingRoundBanner = false;
-       state._roundBannerTimeout = null;
-       clearOverlay();
-     }, 2400);
-   }
-   ```
-   (2400ms total per pacing principle — was specced as 1400 but bump for comprehension. 200ms scrim fade + 360ms ROUND scale-in + 1700ms hold + 140ms exit.)
-
-3. **Gate `triggerSearch`** in `showView` and via `triggerSearch`'s entry path: add `&& !state._showingRoundBanner` to existing curtain/turn-banner gates. The round banner's tail clears the flag and lets the next render path proceed.
-
-4. **CSS** (append to styles.css, after the existing turn-banner block):
-   ```css
-   .hub-round-overlay {
-     display: flex;
-     flex-direction: column;
-     align-items: center;
-     gap: 16px;
-     animation: hubRoundOverlayLife 2400ms ease-out forwards;
-   }
-   .hub-round-line {
-     font-family: var(--font-heading);
-     font-weight: 600;
-     font-size: 1.2rem;
-     letter-spacing: 0.4em;
-     color: var(--gold-dim);
-     text-transform: uppercase;
-     animation: hubRoundLineIn 320ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
-   }
-   .hub-round-go {
-     font-family: var(--font-heading);
-     font-weight: 900;
-     font-size: 14rem;
-     line-height: 0.9;
-     color: var(--gold);
-     text-shadow: 0 0 60px var(--gold-glow);
-     animation: hubRoundGoIn 360ms cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both;
-   }
-   /* Note: hub-overlay's existing background and is-active opacity handle the scrim */
-   @keyframes hubRoundOverlayLife {
-     0%   { opacity: 0; }
-     8%   { opacity: 1; }
-     94%  { opacity: 1; }
-     100% { opacity: 0; }
-   }
-   @keyframes hubRoundLineIn {
-     from { opacity: 0; transform: translateY(8px); letter-spacing: 0.2em; }
-     to   { opacity: 1; transform: translateY(0); letter-spacing: 0.4em; }
-   }
-   @keyframes hubRoundGoIn {
-     from { opacity: 0; transform: scale(0.4); }
-     to   { opacity: 1; transform: scale(1); }
-   }
-   ```
-
-#### H4 — Vote-reveal pip cascade
-
-**Problem:** The vote count reveal currently fires all counts pulsing simultaneously with `voteRevealPulse` (1.5s). Could feel more theatrical with a per-card cascade.
-
-**Implementation:**
-
-1. In `js/ui.js` `renderHubVoting` (find the votingPlayers map block, around line 758): the existing `.hub-vote-count--reveal` class is already applied during reveal. Add `data-revealed="true"` to the count element AND a per-row `nth-child` stagger via CSS.
-
-2. **CSS update** to existing `voteRevealPulse`:
-   ```css
-   @keyframes voteRevealPulse {
-     0%   { transform: scale(0.7); opacity: 0; }
-     45%  { transform: scale(1.18); opacity: 1; }
-     100% { transform: scale(1.0); opacity: 1; }
-   }
-   .hub-vote-count--reveal {
-     animation: voteRevealPulse 700ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-   }
-   /* Stagger by card position — 200ms per card, up to 6 cards */
-   .hub-vote-grid > .hub-vote-card:nth-child(1) .hub-vote-count--reveal { animation-delay: 200ms; }
-   .hub-vote-grid > .hub-vote-card:nth-child(2) .hub-vote-count--reveal { animation-delay: 400ms; }
-   .hub-vote-grid > .hub-vote-card:nth-child(3) .hub-vote-count--reveal { animation-delay: 600ms; }
-   .hub-vote-grid > .hub-vote-card:nth-child(4) .hub-vote-count--reveal { animation-delay: 800ms; }
-   .hub-vote-grid > .hub-vote-card:nth-child(5) .hub-vote-count--reveal { animation-delay: 1000ms; }
-   .hub-vote-grid > .hub-vote-card:nth-child(6) .hub-vote-count--reveal { animation-delay: 1200ms; }
-   ```
-
-3. **Adjust `tallyAndAdvance` reveal window** (in `js/app.js`): the existing 1500ms wait may need bumping to 1900ms to accommodate the longest cascade (6 cards × 200ms + 700ms pulse = ~1900ms). Verify by counting cards in a real game — at 4 players the cascade ends at 800ms+700ms=1500ms, fine. At 5+ players bump to 1900ms.
-
-#### M3 — Vote-pulse re-trigger guard
-
-**Problem:** `state.revealingVotes = true` triggers the pulse on each card. If `debouncedRender` fires during the reveal window, the pulse animation re-applies on already-animated elements — potentially restarting them.
-
-**Implementation:**
-
-1. Add the `data-morph-skip`-style guard to `onBeforeElUpdated` in `js/app.js` (the morphdom callback already has the existing `data-morph-skip` short-circuit at the top — add a parallel one for `data-revealed`):
-   ```js
-   if (fromEl.dataset && fromEl.dataset.revealed === 'true' && toEl.dataset?.revealed === 'true') return false;
-   ```
-   Place this right after the existing `data-morph-skip` check.
-
-2. In `renderHubVoting`, add `data-revealed="true"` to the `.hub-vote-count--reveal` element when `revealing` is true:
-   ```js
-   `<div class="hub-vote-count hub-vote-count--reveal" data-revealed="true">${votes} vote${votes !== 1 ? 's' : ''}</div>`
-   ```
-
-3. Apply the same to the H4 pip elements if you go pip-based (probably keep the existing count-text approach; pips were a designer suggestion that wasn't strictly required — count-with-cascade is enough).
-
-#### Cumulative onBeforeElUpdated allowlist (after Batch E ships)
-
-The callback should check, in order:
-1. `data-revealed="true"` on both fromEl and toEl → return false (M3)
-2. `data-morph-skip="true"` on fromEl → return false (Batch D — already shipped)
-3. Existing slot-cell guard (`hub-char--rolling` / `hub-char--locked`) — unchanged
-
-#### Cumulative `clearSession` resets after Batch E
-
-Add: `_showingRoundBanner`, `_roundBannerTimeout`. (Existing flags shipped: see earlier batches.)
-
-#### Test checkpoints
-
-- Round 1 → results → next round transitions: ROUND 2 / GO! overlay plays for 2.4s; turn-1 curtain replays for round 2 (or skips to turn-banner depending on existing logic — verify); slot reveal kicks in cleanly after.
-- Cast all votes: cards reveal vote counts staggered across the grid. No double-pulse on subsequent renders.
-- M3 specifically: open DevTools and force a re-render (e.g., another player updates avatar) during the reveal window — pulse should NOT re-trigger.
-
-#### Commit message template
-
-```
-batch E: round-2+ overlay + vote-reveal cascade + pulse guard (?v=50)
-
-- H3: ROUND N / GO! overlay on results→playing transition (hub).
-  2400ms total, gates triggerSearch via _showingRoundBanner flag.
-- H4: vote-reveal cascade — nth-child(N) animation-delay stagger
-  on .hub-vote-count--reveal (200ms per card). voteRevealPulse
-  shortened 1.5s → 700ms; tallyAndAdvance reveal-window may need
-  1500→1900ms bump for 5+ player games.
-- M3: data-revealed="true" guard in onBeforeElUpdated prevents
-  re-trigger on debouncedRender during reveal windows.
-
-Cache-bust: v50.
-```
-
----
-
-### BATCH G — Playlist Fallback (Concern B)
-
-**Items:** Concern B alone.
-
-**Cache-bust target: `?v=51`.**
-
-**Migration 004 required.**
-
-#### Migration 004
-
-Create `migrations/004_add_selected_playlist.sql`:
-```sql
-ALTER TABLE yt_rooms ADD COLUMN IF NOT EXISTS selected_playlist_id TEXT;
-```
-
-Mirror inline in `schema.sql` (find `yt_rooms` definition, add the column).
-
-**Run on Supabase BEFORE deploying JS.** The user runs migrations manually.
-
-#### Implementation
-
-1. **Add `Hub.playPlaylist` to `js/hub.js`:**
-   ```js
-   let pendingPlaylistId = null;
-
-   export function playPlaylist(playlistId) {
-     if (!playlistId) return;
-     if (!player || !playerReady) {
-       pendingPlaylistId = playlistId;
-       return;
-     }
-     resetTimer();
-     firstPlayFired = false;
-     showPlayer();
-     try {
-       player.loadPlaylist({ list: playlistId, listType: 'playlist', index: 0 });
-       pendingPlaylistId = null;
-     } catch (err) {
-       console.error('Failed to load playlist:', err);
-     }
-   }
-   ```
-   In `playVideo`, clear `pendingPlaylistId` so the two paths don't trample.
-   In `onReady`, flush `pendingPlaylistId` if set.
-
-2. **`selectVideo` writes the right column** (in `js/app.js`). Currently the function writes `selected_video_id`. Update to discriminate on `video.type`:
-   ```js
-   const isPlaylist = video.type === 'playlist';
-   const updates = {
-     selected_video_index: index,
-     playback_status: 'playing',
-     video_started_at: null, // first-play callback will populate
-   };
-   if (isPlaylist) {
-     updates.selected_playlist_id = video.playlistId;
-     updates.selected_video_id = video.firstVideoId; // seed; first-play overwrites
-   } else {
-     updates.selected_video_id = video.videoId;
-     updates.selected_playlist_id = null;
-   }
-   await db.from('yt_rooms').update(updates).eq('code', state.roomCode);
-   ```
-   Then the player update for picked_video_* (matching Pattern 1 — room first, player second).
-
-3. **Hub plays the right thing** in `runFlipMorph` (currently calls `Hub.playVideo(videoId)` at T+0). Add a discriminator:
-   ```js
-   const playlistId = state.room?.selected_playlist_id;
-   if (playlistId) {
-     Hub.playPlaylist(playlistId);
-   } else {
-     Hub.playVideo(videoId);
-   }
-   ```
-   Same swap in `attemptHubRejoin` (search for the `Hub.playVideo` call there).
-
-4. **First-play callback captures actual video data** (in `js/app.js`, the existing `Hub.setFirstPlayCallback` registration in `createHubRoom` and `attemptHubRejoin`). Currently the callback just writes `video_started_at`. Extend it to capture the actually-playing video's data:
-   ```js
-   Hub.setFirstPlayCallback(async () => {
-     if (!state.isHub || !state.roomCode) return;
-     const updates = { video_started_at: new Date().toISOString() };
-     // For playlists, capture the actually-playing first video's id + title
-     if (state.room?.selected_playlist_id) {
-       const data = Hub.getCurrentVideoData?.() || {};
-       if (data.video_id) updates.selected_video_id = data.video_id;
-     }
-     await db.from('yt_rooms').update(updates).eq('code', state.roomCode);
-   });
-   ```
-   Add to `js/hub.js`:
-   ```js
-   export function getCurrentVideoData() {
-     if (!player || !playerReady) return null;
-     try { return player.getVideoData?.(); } catch { return null; }
-   }
-   ```
-
-5. **8s timeout fallback** for "all items unplayable" — when `Hub.playPlaylist` is called but no `firstPlayFired` event arrives within 8s, mark the tile unplayable and return to selecting view.
-
-   Add `state._playlistFallbackTimer: null` to state + `clearSession`. In `runFlipMorph` (or wherever `Hub.playPlaylist` is called):
-   ```js
-   if (playlistId) {
-     state._playlistFallbackTimer = setTimeout(async () => {
-       state._playlistFallbackTimer = null;
-       if (!state.roomCode) return;
-       // First-play never fired — mark tile unavailable
-       if (state.room?.playback_status === 'playing' && state.room?.selected_playlist_id === playlistId) {
-         toast('Playlist unplayable. Pick another.', 'error');
-         const results = [...(state.room.search_results || [])];
-         const idx = state.room.selected_video_index;
-         if (idx != null && results[idx]) {
-           results[idx] = { ...results[idx], unplayable: true };
-         }
-         await db.from('yt_rooms').update({
-           playback_status: 'selecting',
-           selected_video_id: null,
-           selected_playlist_id: null,
-           search_results: results,
-         }).eq('code', state.roomCode);
-       }
-     }, 8000);
-   }
-   ```
-   Clear this timeout inside the first-play callback (when it actually fires):
-   ```js
-   if (state._playlistFallbackTimer) {
-     clearTimeout(state._playlistFallbackTimer);
-     state._playlistFallbackTimer = null;
-   }
-   ```
-
-6. **Render unplayable tiles greyed** in `js/ui.js`:
-   - In the selecting branch's thumb template, check `video.unplayable` and add `.hub-thumb--unplayable` class. Skip the `data-action="select-video"` for that tile.
-   - Same for the phone-side num-grid in `renderGame` — gate the click on `available && !unplayable`.
-
-   CSS:
-   ```css
-   .hub-thumb--unplayable {
-     opacity: 0.3;
-     filter: grayscale(1);
-     cursor: not-allowed;
-   }
-   .hub-thumb--unplayable::after {
-     content: 'UNAVAILABLE';
-     position: absolute;
-     top: 50%;
-     left: 50%;
-     transform: translate(-50%, -50%);
-     background: rgba(0, 0, 0, 0.85);
-     color: var(--text-muted);
-     font-family: var(--font-heading);
-     font-weight: 700;
-     font-size: 0.85rem;
-     letter-spacing: 2px;
-     padding: 6px 14px;
-     border-radius: 4px;
-     z-index: 5;
-   }
-   ```
-
-#### Test checkpoints
-
-- Pick a regular video → unchanged behavior.
-- Pick a playlist where item 1 is playable → plays normally; voting screen shows item 1's thumbnail (via captured `selected_video_id`).
-- Pick a playlist where item 1 is unplayable but item 2+ is fine → IFrame native skip; first-play callback fires when item 2 starts; voting shows item 2's thumb.
-- Pick a playlist where ALL items are unplayable → 8s timeout fires; tile turns greyscale-striped with "UNAVAILABLE"; toast appears; active player picks again.
-- Hub refresh during playlist playback → `attemptHubRejoin` resumes via `Hub.playPlaylist` branch.
-
-#### Commit message template
-
-```
-batch G: playlist fallback via YT IFrame native loadPlaylist (?v=51)
-
-- migration 004: yt_rooms.selected_playlist_id TEXT
-- Hub.playPlaylist uses native loadPlaylist({list, listType:'playlist', index:0})
-  — IFrame skips unplayable items automatically.
-- selectVideo writes selected_playlist_id when picking playlists; first-play
-  callback captures the actually-playing video id via getVideoData() so
-  skip-vote / voting view use the right id.
-- runFlipMorph + attemptHubRejoin discriminate: selected_playlist_id →
-  playPlaylist; else selected_video_id → playVideo.
-- 8s "all unplayable" timeout marks the tile + returns to selecting view.
-- Unplayable tiles render greyscale with "UNAVAILABLE" overlay; not tappable.
-
-Cache-bust: v51.
-```
+For "what comes next" candidates, see `BACKLOG.md`. For full-flow context before touching the turn/round/voting paths, read `FLOW.md` + `FLOW-OVERVIEW.md` first.
 
 ---
 
 ## Schema migrations
 
-Three migrations exist in `migrations/`:
+Four migrations exist in `migrations/`:
 - `001_add_avatar.sql` — `yt_players.avatar TEXT`
 - `002_add_streak_fields.sql` — `yt_rooms.last_round_winner TEXT, streak_count INTEGER`
 - `003_add_skip_vote.sql` — `yt_players.thumbs_down BOOL DEFAULT false; yt_rooms.video_started_at TIMESTAMPTZ`
+- `004_add_selected_playlist.sql` — `yt_rooms.selected_playlist_id TEXT` (Batch G)
 
-All three have been run on the deployed Supabase. Future migrations:
+All four have been run on the deployed Supabase (004 ran alongside the Batch G JS push). Future migrations:
 1. Land as `migrations/NNN_name.sql` AND update `schema.sql` inline.
 2. Be run on Supabase BEFORE the JS that depends on them ships (otherwise INSERT/UPDATE 400s on unknown columns).
-
-**Migration 004 (Batch G):** see Batch G section above for the SQL. User runs it on Supabase before pulling the Batch G JS.
 
 ---
 
@@ -596,12 +284,17 @@ GitHub Pages auto-deploys on push to `master`. Cache-bust ensures the browser fe
 
 ---
 
-## Picking up Batches E or G
+## Picking up the next session
 
-1. Read this HANDOFF + the relevant batch section above.
-2. Read `BACKLOG.md` for context on deferred items.
-3. Brief `app-developer` directly with the batch spec from this doc — the specs are detailed enough to ship without re-engaging PM.
-4. For Batch G, remind the user to run `migrations/004_add_selected_playlist.sql` on Supabase before deploying the JS.
-5. Push to master after a coherent commit. Don't pause to ask (solo dev preference).
+1. Read this HANDOFF for state context + saved-memory recap.
+2. Read `FLOW-OVERVIEW.md` for a one-screen mental model of every path.
+3. Read `FLOW.md` only if you need file:line precision for a specific beat (you usually do before changing a transition).
+4. Read `BACKLOG.md` for the candidate work pool. Items are sized (S/M/L) with rough scope.
+5. Pick a triage path:
+   - **Playtest report from the user** → bug-investigator with the reported symptoms; produce a diagnosis brief; then app-developer with the fix spec.
+   - **Polish/feature pull from BACKLOG** → if the entry has a "Recommended shape (gut)" note, it's design-complete enough for app-developer; otherwise refiner first.
+   - **New idea** → idea-man → refiner → project-manager → app-developer. Don't skip refiner; it catches scope creep.
+6. Bump cache-bust on every JS edit. New schema columns require a migration file AND a `schema.sql` update AND the user running it on Supabase before the JS lands.
+7. Push to master after each coherent commit. Don't pause to ask (solo dev preference).
 
-The remaining batches close out the planned roadmap. After E and G ship, the major polish work is done. Backlog items become the next-question agenda.
+The original roadmap is closed. Future work is reactive — driven by playtest, BACKLOG, or fresh ideas, not a pre-planned ship sequence.
