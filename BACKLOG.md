@@ -236,6 +236,60 @@ Ideas evaluated and shelved for later. Not rejected outright — just not in the
 
 ---
 
+## Rebrand — drop "YouTube" from the product name → "Tube Roulette"
+
+**Source:** Chat 2026-04-29 — review of YouTube API ToS / Developer Policies / Brand Guidelines ahead of a possible quota-extension audit and public release.
+
+**The pitch:** YouTube's Brand Guidelines explicitly prohibit using "YouTube," "YT," or any variant *as part of an application's name* — they call out "YouTube for Kids" / "YouTube Education" as the violation pattern, which is structurally identical to "YouTube Roulette." Compatibility phrasing ("a great app for YouTube," "powered by YouTube") *is* allowed in subtitles/marketing copy. Product name needs to change before we ship publicly or apply for a quota extension; subtitle does the brand-bridge.
+
+**Recommended landing:** `Tube Roulette — the party game for YouTube`. "Tube" is generic English, identical syllable rhythm to the current name (small rebrand cost), preserves the roulette/spin metaphor the slot reveal + turn structure already lean into. Reel Roulette / Clip Roulette are alternates if a future design pass wants to move further from the original.
+
+**Surface area (rough sweep — 14 files contain "YouTube Roulette"):**
+- User-visible copy: [index.html](index.html) `<title>`, header, meta tags; Hub lobby/title bars; phone home screen; results / final winner screens; any toast strings.
+- Repo / build: [package.json](package.json) `name`, [README.md](README.md), [HANDOFF.md](HANDOFF.md), [FLOW.md](FLOW.md), [FLOW-OVERVIEW.md](FLOW-OVERVIEW.md) — internal docs, low priority but worth sweeping for consistency.
+- Code comments: [js/app.js](js/app.js), [js/ui.js](js/ui.js), [js/hub.js](js/hub.js), [js/config.js](js/config.js), [css/styles.css](css/styles.css), [schema.sql](schema.sql), [supabase/functions/youtube-search/index.ts](supabase/functions/youtube-search/index.ts) all have a top-of-file comment naming the project.
+- DB table prefix `yt_` is fine — internal, not user-facing — leave it.
+- Working directory `YouToube Roulette` and git repo name: don't rename mid-flight, do at a clean commit boundary if at all.
+
+**Open questions:**
+- Do we want the subtitle baked into the page `<title>` and Hub header (always visible), or only on the home screen / lobby (less noisy in-game)? Probably home + lobby only, in-game just shows "Tube Roulette" or no title at all.
+- Domain / hosting URL — if we already have a `youtube-roulette.*` URL booked, decide whether to move or keep as a redirect.
+
+**Why deferred:** Not blocking anything in the current build queue; this is a pre-publish gate, not a playtest blocker. Worth bundling with the YouTube attribution branding pass below since they're both audit-prep work.
+
+**Rough scope:** S. Mostly find/replace in user-visible strings + a subtitle line in two or three views. Internal docs/comments are an optional second sweep.
+
+**Dependencies:** Pair with "YouTube attribution branding on every page" below — both are audit-prep. Do them together.
+
+---
+
+## YouTube attribution branding on every page (audit-prep)
+
+**Source:** Chat 2026-04-29 — same ToS review as the rebrand entry above.
+
+**The pitch:** YouTube Developer Policies require that any surface displaying YouTube content "must make clear to the viewer that YouTube is the source" via the proper YouTube Brand Features per the Branding Guidelines, and that the logo "link back to YouTube content or to a YouTube component of that application." Today none of our views show a YouTube wordmark/logo — Hub grid, phone numbered grid, Now Playing, vote screen, results, winner overlay all display YouTube content with no attribution. This is the single most visible compliance gap before we'd be ready to apply for a quota extension or publish.
+
+**Surfaces that need attribution (anywhere YouTube content is shown):**
+- Hub: 20-thumbnail selecting grid, Now Playing line + iframe, voting grid, scoreboard (shows past picks), winner overlay (shows the winning thumbnail).
+- Phone: numbered selecting grid, vote grid, results screen if it shows thumbnails.
+- Anywhere a video title, channel name, or thumbnail flows from the YT Data API into the UI.
+
+**Design shape (gut):** small persistent YouTube wordmark in a corner of the Hub views (bottom-right, low-emphasis but visible), and a smaller wordmark on phone views' bottom bar. Linked to `https://youtube.com` (or to the currently-playing video URL on the Now Playing surface, which is the spec-compliant "link to YouTube content" form). Colors per the official brand kit — don't recolor or restyle the logo. Asset comes from YouTube's brand resource pack (https://brand.youtube/), which is the canonical source.
+
+**Open design questions:**
+- Wordmark vs. play-button-only logo? The wordmark reads more clearly at small sizes and is the form their guidelines lean on for attribution. Use wordmark.
+- Light vs. dark variant — the Hub is dark (`#0a0a0a`-ish backgrounds) so the white wordmark; phones have mixed surfaces, may need both.
+- Dynamic link target on the Now Playing surface (link to the actual playing video) vs. always linking to `youtube.com` — dynamic is more correct under the policy ("link to a YouTube component"), trivial to wire since we already have `current_video_id`.
+- Don't use the YouTube logo as a button or part of a control — it's strictly attribution.
+
+**Why deferred:** Pre-publish/audit-prep, not a playtest blocker. Pair with the rebrand above.
+
+**Rough scope:** S. New small component (HTML + CSS) inserted into Hub view templates and phone view templates. Asset download from brand.youtube. No JS state changes.
+
+**Dependencies:** None mechanical. Worth doing together with the rebrand so all the audit-prep ships in one batch.
+
+---
+
 ## Hub Voting Screen — Full Visual Review
 
 **Source:** Phase B playtest 2026-04-26.
