@@ -1583,8 +1583,11 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
 .hub-thumb--dealing {
   z-index: 2;
   will-change: transform;
-  animation: cardDealIn 440ms var(--ease-over) var(--deal-delay, 0ms) both;
+  animation: cardDealIn 760ms var(--ease-over) var(--deal-delay, 0ms) both;
 }
+/* A settled card is fully landed and JS-owned — give it an explicit resting state
+   so it never depends on the finished animation's retained fill. */
+.hub-thumb--settled { opacity: 1; transform: none; }
 @keyframes cardDealIn {
   from { opacity: 0; transform: translateY(-26px) scale(0.93) rotate(-4deg); }
   to   { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }

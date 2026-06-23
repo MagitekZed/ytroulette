@@ -3,7 +3,7 @@
 This document is the **source of truth for what's *supposed* to happen at each beat** of a YouTube Roulette game. Future sessions diff observed behavior against this doc to spot regressions.
 
 - All file:line references are absolute to the project root.
-- Cache-bust at time of writing: `?v=54`.
+- Cache-bust at time of writing: `?v=55`.
 - This doc covers what's shipped through Batches A–H + Studio Card Lift refinements.
 
 ---

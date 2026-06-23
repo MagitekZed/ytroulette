@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=54';
-import * as Hub from './hub.js?v=54';
+import * as UI from './ui.js?v=55';
+import * as Hub from './hub.js?v=55';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -156,7 +156,7 @@ function runCardDeal() {
     const idx = +cell.dataset.thumbIdx || 0;
     const row = +cell.dataset.dealRow || 0;
     const col = +cell.dataset.dealCol || 0;
-    const delay = perRow ? (row * 150 + col * 35) : (idx * 120);
+    const delay = perRow ? (row * 300 + col * 70) : (idx * 240);
     cell.style.setProperty('--deal-delay', delay + 'ms');
     cell.classList.add('hub-thumb--dealing');
     const onEnd = (e) => {
@@ -1151,7 +1151,10 @@ function handleHubPlaybackChange() {
   if (playback === 'playing') {
     runSelectionThenLaunch();
   } else {
-    // Any non-playing state: hide the player overlay
+    // Any non-playing state: cancel a still-pending deferred play (a Stop & Next or
+    // skip-vote during the 500ms launch delay would otherwise let the video load and
+    // play into the voting view), then hide the player overlay.
+    if (state._videoStartTimeout) { clearTimeout(state._videoStartTimeout); state._videoStartTimeout = null; }
     Hub.stopVideo();
   }
 }
@@ -1220,7 +1223,7 @@ function runFlipMorph(idx, videoId) {
   if (!tile) {
     state._videoStartTimeout = setTimeout(() => {
       state._videoStartTimeout = null;
-      if (!state.roomCode) return;
+      if (!state.roomCode || state.room?.playback_status !== 'playing') return;
       if (playlistId) {
         armPlaylistFallback(playlistId);
         Hub.playPlaylist(playlistId);
@@ -1251,7 +1254,7 @@ function runFlipMorph(idx, videoId) {
   // 8s countdown 500ms before the playlist actually loads.
   state._videoStartTimeout = setTimeout(() => {
     state._videoStartTimeout = null;
-    if (!state.roomCode) return;
+    if (!state.roomCode || state.room?.playback_status !== 'playing') return;
     if (playlistId) {
       armPlaylistFallback(playlistId);
       Hub.playPlaylist(playlistId);
@@ -1577,6 +1580,16 @@ function render() {
       if (fromEl.classList && fromEl.classList.contains('hub-thumb--dealing')) {
         if (toEl.dataset?.morphSkip === 'true' || fromEl.dataset.dealKey !== toEl.dataset?.dealKey) return true;
         return false;
+      }
+      // Settled cards are JS-owned (like locked slot cells) — skip morphing them so a
+      // post-hero poll re-render can't restyle the whole grid in one frame (the
+      // flicker-to-black). Let the morph through only when a real new state must paint
+      // (pick / dim-others / unplayable / a new board via changed deal-key).
+      if (fromEl.classList && fromEl.classList.contains('hub-thumb--settled')) {
+        const toCls = toEl.className || '';
+        return /hub-thumb--(picked|others-dimmed|unplayable)/.test(toCls)
+          || toEl.dataset?.morphSkip === 'true'
+          || fromEl.dataset.dealKey !== toEl.dataset?.dealKey;
       }
       return true;
     },
