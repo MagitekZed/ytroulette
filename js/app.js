@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=52';
-import * as Hub from './hub.js?v=52';
+import * as UI from './ui.js?v=53';
+import * as Hub from './hub.js?v=53';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -2153,14 +2153,21 @@ function toast(message, type = 'info') {
 function setupEventListeners() {
   const tap = () => { try { navigator.vibrate?.(10); } catch {} };
   const VIBRATE_ACTIONS = new Set(['select-video','cast-vote','reroll','enter-replace','replace-char','enter-swap','swap-char','toggle-ready','finish-turn','stop-and-next','cycle-avatar','toggle-thumbs-down']);
+  const LOADING_DOTS = '<span class="btn-dots"><i></i><i></i><i></i></span>';
+
+  // Haptic fires on press (pointerdown) so the buzz coincides with the visual press,
+  // not the release. Mirrors the click handler's action resolution.
+  document.getElementById('app').addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    const btn = e.target.closest('[data-action]');
+    if (btn && VIBRATE_ACTIONS.has(btn.dataset.action)) tap();
+  });
 
   document.getElementById('app').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const action = btn.dataset.action;
     const value = btn.dataset.value;
-
-    if (VIBRATE_ACTIONS.has(action)) tap();
 
     switch (action) {
       case 'show-create':
@@ -2184,21 +2191,27 @@ function setupEventListeners() {
         const name = document.getElementById('create-name')?.value?.trim();
         const winScore = parseInt(document.getElementById('create-winscore')?.value) || DEFAULT_WIN_SCORE;
         if (!name) { toast('Enter your name!', 'error'); break; }
+        const createLabel = btn.innerHTML;
         btn.disabled = true;
+        btn.innerHTML = LOADING_DOTS;
         try {
           await createRoom(name, winScore);
         } finally {
           btn.disabled = false;
+          btn.innerHTML = createLabel;
         }
         break;
       }
       case 'create-hub': {
         const winScore = parseInt(document.getElementById('hub-winscore')?.value) || DEFAULT_WIN_SCORE;
+        const hubLabel = btn.innerHTML;
         btn.disabled = true;
+        btn.innerHTML = LOADING_DOTS;
         try {
           await createHubRoom(winScore);
         } finally {
           btn.disabled = false;
+          btn.innerHTML = hubLabel;
         }
         break;
       }
@@ -2206,9 +2219,15 @@ function setupEventListeners() {
         const name = document.getElementById('join-name')?.value?.trim();
         const code = document.getElementById('join-code')?.value?.trim();
         if (!name || !code) { toast('Enter your name and room code!', 'error'); break; }
+        const joinLabel = btn.innerHTML;
         btn.disabled = true;
-        await joinRoom(code, name);
-        btn.disabled = false;
+        btn.innerHTML = LOADING_DOTS;
+        try {
+          await joinRoom(code, name);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = joinLabel;
+        }
         break;
       }
       case 'toggle-ready': await toggleReady(); break;

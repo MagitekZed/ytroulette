@@ -34,6 +34,29 @@
   --radius-lg: 20px;
   --radius-xl: 28px;
   --transition: 0.25s ease;
+
+  /* === MOTION SYSTEM (see MOTION.md) === */
+  /* Navigation durations — the fast clock (beats keep their own 1.6-4.2s holds) */
+  --dur-instant: 90ms;
+  --dur-quick: 180ms;
+  --dur-snap: 280ms;
+  --dur-move: 420ms;
+  --dur-sweep: 520ms;
+  /* Stagger */
+  --stag: 60ms;
+  --stag-beat: 200ms;
+  /* Easings (promoted from the existing inline curves) */
+  --ease-out: cubic-bezier(0.2, 0, 0.2, 1);
+  --ease-rise: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-over: cubic-bezier(0.16, 1.4, 0.3, 1);
+  /* The signature gesture — overshoot-and-settle (arrivals of consequence) */
+  --ease-settle: linear(0, 0.7 18%, 1.08 40%, 0.98 62%, 1.02 80%, 1);
+  /* Spatial / elevation */
+  --lift-sm: 12px;
+  --lift-md: 28px;
+  --lift-lg: 48px;
 }
 
 /* === RESET === */
@@ -93,6 +116,16 @@ body {
   -webkit-backdrop-filter: blur(16px);
   z-index: 100;
   user-select: all;
+  animation: badgeArrive var(--dur-snap) var(--ease-settle) both,
+             badgeGlow 3s ease-in-out 0.4s infinite alternate;
+}
+@keyframes badgeArrive {
+  from { opacity: 0; transform: translateY(-8px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes badgeGlow {
+  from { text-shadow: 0 0 6px var(--gold-glow); }
+  to   { text-shadow: 0 0 14px var(--gold-glow); }
 }
 
 /* === TOAST NOTIFICATIONS === */
@@ -118,7 +151,8 @@ body {
   -webkit-backdrop-filter: blur(16px);
   opacity: 0;
   transform: translateY(-16px) scale(0.96);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity var(--dur-snap) var(--ease-rise),
+              transform var(--dur-snap) var(--ease-rise);
   pointer-events: auto;
 }
 .toast.show { opacity: 1; transform: translateY(0) scale(1); }
@@ -151,14 +185,33 @@ body {
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--transition);
+  transition: transform var(--dur-quick) var(--ease-settle),
+              box-shadow var(--dur-quick) var(--ease-out),
+              background var(--dur-quick) var(--ease-out),
+              border-color var(--dur-quick) var(--ease-out),
+              color var(--dur-quick) var(--ease-out);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   position: relative;
   overflow: hidden;
 }
-.btn:active { transform: scale(0.97); }
+/* Press snaps fast (--dur-instant); release reverts to base .btn's --ease-settle for the spring-settle. */
+.btn:active { transform: scale(0.96); transition: transform var(--dur-instant) var(--ease-out); }
+
+/* Async-action loading state: text swapped for a 3-dot pulse (inherits text color) */
+.btn-dots { display: inline-flex; align-items: center; gap: 5px; }
+.btn-dots i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor;
+  animation: btnDotPulse 0.9s var(--ease-inout) infinite;
+}
+.btn-dots i:nth-child(2) { animation-delay: 0.15s; }
+.btn-dots i:nth-child(3) { animation-delay: 0.30s; }
+@keyframes btnDotPulse {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50%      { opacity: 1;   transform: translateY(-3px); }
+}
 
 .btn-primary {
   background: linear-gradient(135deg, var(--red), var(--red-dark));
@@ -262,11 +315,12 @@ input[type="text"] {
   font-family: var(--font-body);
   font-size: 1rem;
   outline: none;
-  transition: border-color var(--transition);
+  transition: border-color var(--dur-quick) var(--ease-out),
+              box-shadow var(--dur-quick) var(--ease-out);
   -webkit-appearance: none;
 }
 input[type="text"]::placeholder { color: var(--text-dim); }
-input[type="text"]:focus { border-color: var(--red); }
+input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-glow); }
 
 .code-input {
   text-align: center;
