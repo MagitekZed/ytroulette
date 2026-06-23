@@ -321,12 +321,20 @@ against the rendered set (by index + thumbnail URL):
 
 ## 5. Other signature moments  *(design direction — detail pass before build)*
 
-### 5.1 Phone COMMIT — the active player taps their pick
+### 5.1 Phone COMMIT — the active player taps their pick  *(BUILT, ?v=57)*
 The phone is the *controller*; today the pick tap is a generic button scale. Make it land: tile dips
 (`scale 0.92`) with a **double-tick haptic** `vibrate([12,30,12])`; snaps up `--ease-settle` to 1.06
 with a player-color border flood + shadow bloom; the **other tiles recede** (`opacity 0.35, scale
-0.97`) so focus collapses onto the choice; a player-color sweep wipes the tile, "sending" the pick —
-timed to land as the Hub's Studio Card Lift begins, so the phone *feels like it caused the TV.*
+0.97`) so focus collapses onto the choice; a player-color sweep wipes the tile, "sending" the pick.
+
+**As built:** `numCellCommit` dip 0.92 → peak 1.08 → settle 1.03; `numCellRecede` → opacity 0.32,
+scale 0.97; a `::after` `numCellSweep`. A `_committingPick` flag holds the numbered grid for ~850ms
+(optimistically flipping `playback_status` to `playing` locally, mirroring the hub's flip) so the beat
+plays before the view turns over to the Stop controls, and a slow write can't flash the grid back to a
+tappable state. **Cross-device timing:** the phone beat (~700ms) deliberately overlaps the Hub's
+*selection-beat start* (the Hub runs a 3000ms selection beat before the Studio Card Lift, so syncing
+the sweep to the Card Lift ~2.3s later would make the controller feel laggy). Do NOT add a multi-second
+phone delay to "sync" them.
 
 ### 5.2 Beat → beat color handoff (connective tissue)
 Thread the active player's color through the seams: as the turn banner exits, the search-term cells are

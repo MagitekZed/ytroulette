@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=56';
-import * as Hub from './hub.js?v=56';
+import * as UI from './ui.js?v=57';
+import * as Hub from './hub.js?v=57';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -69,6 +69,8 @@ const state = {
   _thumbsGateInterval: null,
   _showingSelection: false,
   _cardDealDone: false,
+  _committingPick: null,
+  _commitTimeout: null,
   _selectionTimeout: null,
   _launchingVideo: false,
   _launchingTimeout: null,
@@ -614,6 +616,8 @@ function clearSession() {
   if (state._selectionTimeout) { clearTimeout(state._selectionTimeout); state._selectionTimeout = null; }
   state._cardDealDone = false;
   stopCardDeal();
+  state._committingPick = null;
+  if (state._commitTimeout) { clearTimeout(state._commitTimeout); state._commitTimeout = null; }
   state._launchingVideo = false;
   if (state._launchingTimeout) { clearTimeout(state._launchingTimeout); state._launchingTimeout = null; }
   state._showingRoundBanner = false;
@@ -1831,11 +1835,11 @@ async function selectVideo(index) {
   const video = results[index];
   if (!video) {
     toast('Video not found. Try another.', 'error');
-    return;
+    return false;
   }
 
   const me = getMe();
-  if (!me) return;
+  if (!me) return false;
 
   const isPlaylist = video.type === 'playlist';
   const videoId = isPlaylist ? video.firstVideoId : video.videoId;
@@ -1862,7 +1866,7 @@ async function selectVideo(index) {
   if (roomErr) {
     console.error('selectVideo room update failed:', roomErr);
     toast('Failed to start playback. Try again.', 'error');
-    return;
+    return false;
   }
 
   // Write B: player (records who picked what — for voting view).
@@ -1887,7 +1891,9 @@ async function selectVideo(index) {
     } catch (rollbackErr) {
       console.error('selectVideo rollback failed:', rollbackErr);
     }
+    return false;
   }
+  return true;
 }
 
 async function stopPlayback() {
@@ -2277,7 +2283,11 @@ function setupEventListeners() {
   document.getElementById('app').addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'touch') return;
     const btn = e.target.closest('[data-action]');
-    if (btn && VIBRATE_ACTIONS.has(btn.dataset.action)) tap();
+    if (!btn) return;
+    const action = btn.dataset.action;
+    // The pick gets a double-tick "ka-chunk" lock; everything else a single buzz.
+    if (action === 'select-video') { try { navigator.vibrate?.([12, 30, 12]); } catch {} }
+    else if (VIBRATE_ACTIONS.has(action)) tap();
   });
 
   document.getElementById('app').addEventListener('click', async (e) => {
@@ -2404,7 +2414,36 @@ function setupEventListeners() {
         }
         break;
       }
-      case 'select-video': await selectVideo(parseInt(value)); break;
+      case 'select-video': {
+        const pickIdx = parseInt(value);
+        if (state._committingPick != null) break; // ignore taps mid-commit
+        // COMMIT beat (§5.1): show it optimistically and hold the grid ~850ms so
+        // the lock/recede/sweep plays before the view flips to playback controls.
+        state._committingPick = pickIdx;
+        render();
+        // Optimistic playback flip (mirrors the hub's 'searching' flip): so the
+        // beat can outlast a slow write without the grid flashing back to the
+        // tappable selecting view (which would allow a stray second pick).
+        if (state.room) state.room.playback_status = 'playing';
+        clearTimeout(state._commitTimeout);
+        state._commitTimeout = setTimeout(() => {
+          if (!state.roomCode) return;
+          state._committingPick = null;
+          state._commitTimeout = null;
+          render();
+        }, 850);
+        const ok = await selectVideo(pickIdx);
+        if (!ok) {
+          // Pick failed — drop the beat + the optimistic flip so the player can
+          // re-pick (the DB stayed/rolled back to 'selecting').
+          clearTimeout(state._commitTimeout);
+          state._commitTimeout = null;
+          state._committingPick = null;
+          if (state.room) state.room.playback_status = 'selecting';
+          render();
+        }
+        break;
+      }
       case 'stop-playback': await stopPlayback(); break;
       case 'stop-and-next': await stopAndNext(); break;
       case 'toggle-thumbs-down': await toggleThumbsDown(); break;

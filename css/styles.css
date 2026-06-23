@@ -2444,6 +2444,39 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
   from { opacity: 0; transform: scale(0.95); }
   to   { opacity: 1; transform: scale(1); }
 }
+
+/* COMMIT beat — the active player's pick locking in (MOTION.md §5.1): the picked
+   number dips then snaps up in player color while the others recede, and a
+   player-color sweep "sends" it to the Hub. JS holds the grid (_committingPick)
+   for ~850ms so the beat plays before the view flips to playback controls. */
+.num-cell--committed {
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+  color: #fff;
+  border-color: var(--player-color, var(--red));
+  background: color-mix(in srgb, var(--player-color, var(--red)) 28%, transparent);
+  box-shadow: 0 0 0 2px var(--player-color, var(--red)),
+              0 6px 24px 2px color-mix(in srgb, var(--player-color, var(--red)) 45%, transparent);
+  animation: numCellCommit 700ms var(--ease-settle) forwards;
+}
+@keyframes numCellCommit {
+  0%   { transform: scale(0.92); }
+  30%  { transform: scale(1.08); }
+  100% { transform: scale(1.03); }
+}
+.num-cell--committed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, color-mix(in srgb, var(--player-color, #fff) 60%, transparent) 50%, transparent 65%);
+  transform: translateX(-130%);
+  animation: numCellSweep 560ms 140ms var(--ease-out) forwards;
+}
+@keyframes numCellSweep { to { transform: translateX(130%); } }
+.num-cell--receded { animation: numCellRecede 280ms var(--ease-out) forwards; }
+@keyframes numCellRecede { to { opacity: 0.32; transform: scale(0.97); } }
 .num-cell-none {
   border-color: rgba(255, 107, 107, 0.4);
   color: #FF6B6B;

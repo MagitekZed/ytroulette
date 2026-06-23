@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=55';
+import { formatDuration } from './hub.js?v=57';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -243,6 +243,20 @@ function renderPlayerHubControls(state, playbackStatus) {
   const me = state.players.find(p => p.id === state.playerId);
   const results = state.room?.search_results || [];
 
+  // COMMIT beat (§5.1): hold the numbered grid — picked cell locked, others
+  // receded — for the ~850ms tactile moment after a pick, overriding the
+  // playback echo so the view doesn't flip to the Stop controls mid-beat.
+  if (state._committingPick != null) {
+    return `
+      <div class="superpowers" style="opacity:0.35;pointer-events:none">
+        <button class="btn btn-sm btn-reroll" disabled>🎲 Reroll</button>
+        <button class="btn btn-sm btn-replace" disabled>🔄 Replace</button>
+        <button class="btn btn-sm btn-swap" disabled>↔️ Swap</button>
+      </div>
+      <div class="pick-instructions"><p>Locked in — watch the screen!</p></div>
+      ${renderNumberGrid(results.length, state)}`;
+  }
+
   // Search failed: hub explicitly set status to 'search_failed'.
   // Surface a clear retry path via superpowers (the only way the active player can recover).
   if (playbackStatus === 'search_failed' && !state.replaceMode && !state.swapMode) {
@@ -325,14 +339,23 @@ function renderPlayerHubControls(state, playbackStatus) {
 function renderNumberGrid(count, state) {
   const justLoaded = state?._justLoadedCells ? ' data-just-loaded="true"' : '';
   const results = state?.room?.search_results || [];
+  const committing = state?._committingPick;
+  const isCommitting = committing != null;
+  const myColor = isCommitting ? getPlayerColor(state.playerId) : '';
   let cells = '';
   for (let i = 0; i < 20; i++) {
     const available = i < count;
     const unplayable = available && !!results[i]?.unplayable;
-    const tappable = available && !unplayable;
+    // No taps while a pick is committing (the beat owns the grid).
+    const tappable = available && !unplayable && !isCommitting;
     const loadedAttr = available ? justLoaded : '';
-    const cls = !available ? 'num-cell-empty' : (unplayable ? 'num-cell-unplayable' : '');
-    cells += `<button class="num-cell ${cls}"${loadedAttr}
+    let cls = !available ? 'num-cell-empty' : (unplayable ? 'num-cell-unplayable' : '');
+    let styleAttr = '';
+    if (isCommitting && available) {
+      if (i === committing) { cls += ' num-cell--committed'; styleAttr = ` style="--player-color:${myColor}"`; }
+      else cls += ' num-cell--receded';
+    }
+    cells += `<button class="num-cell ${cls}"${loadedAttr}${styleAttr}
       ${tappable ? `data-action="select-video" data-value="${i}"` : 'disabled'}>${i + 1}</button>`;
   }
   return `<div class="number-grid">${cells}</div>`;
