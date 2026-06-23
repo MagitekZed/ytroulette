@@ -94,6 +94,14 @@ body {
   min-height: 0;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 8px;
+  /* Inset the content + feather the left/right edges so a popped/glowing cell
+     (the COMMIT beat) dissolves at the play-area boundary instead of getting
+     hard-clipped by the scroll container. Content sits in the solid zone (crisp);
+     only the glow that reaches into the gutter fades. */
+  padding-left: 16px;
+  padding-right: 16px;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+          mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
 }
 
 .hidden { display: none !important; }

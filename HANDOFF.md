@@ -16,7 +16,7 @@ Read this first when picking up the project in a new session. It captures curren
 - **Stack:** Vanilla JS, no build step. Supabase for realtime + a single Edge Function for the YouTube search. GitHub Pages deploy.
 - **Deploy URL:** `https://magitekzed.github.io/ytroulette/` (GitHub Pages **project-page subpath**, served from `master` branch root). The bare root `magitekzed.github.io` 404s. Note: GitHub Pages cache-busts JS/CSS via `?v=N` but NOT `index.html` itself (served ~10-min cache), so after a push a hard-refresh / incognito may be needed to pick up the new `?v=N` HTML.
 - **Repo:** `https://github.com/MagitekZed/ytroulette`
-- **Current cache-bust:** CSS `?v=59`, JS `?v=59`. Every JS edit bumps this in lockstep across `index.html`, both imports in `js/app.js`, and the import in `js/ui.js`.
+- **Current cache-bust:** CSS `?v=60`, JS `?v=60`. Every JS edit bumps this in lockstep across `index.html`, both imports in `js/app.js`, and the import in `js/ui.js`.
 - **Schema:** `schema.sql` is canonical. Migrations live in `migrations/NNN_name.sql` and are run manually via Supabase SQL Editor.
 
 ---
