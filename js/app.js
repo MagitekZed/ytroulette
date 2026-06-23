@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=57';
-import * as Hub from './hub.js?v=57';
+import * as UI from './ui.js?v=59';
+import * as Hub from './hub.js?v=59';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -2286,7 +2286,7 @@ function setupEventListeners() {
     if (!btn) return;
     const action = btn.dataset.action;
     // The pick gets a double-tick "ka-chunk" lock; everything else a single buzz.
-    if (action === 'select-video') { try { navigator.vibrate?.([12, 30, 12]); } catch {} }
+    if (action === 'select-video') { try { navigator.vibrate?.([28, 45, 28]); } catch {} }
     else if (VIBRATE_ACTIONS.has(action)) tap();
   });
 
@@ -2417,7 +2417,7 @@ function setupEventListeners() {
       case 'select-video': {
         const pickIdx = parseInt(value);
         if (state._committingPick != null) break; // ignore taps mid-commit
-        // COMMIT beat (§5.1): show it optimistically and hold the grid ~850ms so
+        // COMMIT beat (§5.1): show it optimistically and hold the grid ~1150ms so
         // the lock/recede/sweep plays before the view flips to playback controls.
         state._committingPick = pickIdx;
         render();
@@ -2431,7 +2431,7 @@ function setupEventListeners() {
           state._committingPick = null;
           state._commitTimeout = null;
           render();
-        }, 850);
+        }, 1150);
         const ok = await selectVideo(pickIdx);
         if (!ok) {
           // Pick failed — drop the beat + the optimistic flip so the player can

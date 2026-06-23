@@ -2455,28 +2455,28 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
   overflow: hidden;
   color: #fff;
   border-color: var(--player-color, var(--red));
-  background: color-mix(in srgb, var(--player-color, var(--red)) 28%, transparent);
-  box-shadow: 0 0 0 2px var(--player-color, var(--red)),
-              0 6px 24px 2px color-mix(in srgb, var(--player-color, var(--red)) 45%, transparent);
-  animation: numCellCommit 700ms var(--ease-settle) forwards;
+  background: color-mix(in srgb, var(--player-color, var(--red)) 44%, transparent);
+  box-shadow: 0 0 0 3px var(--player-color, var(--red)),
+              0 8px 40px 6px color-mix(in srgb, var(--player-color, var(--red)) 65%, transparent);
+  animation: numCellCommit 880ms var(--ease-settle) forwards;
 }
 @keyframes numCellCommit {
-  0%   { transform: scale(0.92); }
-  30%  { transform: scale(1.08); }
-  100% { transform: scale(1.03); }
+  0%   { transform: scale(0.84); }
+  42%  { transform: scale(1.24); }
+  100% { transform: scale(1.08); }
 }
 .num-cell.num-cell--committed::after {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(105deg, transparent 35%, color-mix(in srgb, var(--player-color, #fff) 60%, transparent) 50%, transparent 65%);
-  transform: translateX(-130%);
-  animation: numCellSweep 560ms 140ms var(--ease-out) forwards;
+  background: linear-gradient(105deg, transparent 20%, color-mix(in srgb, var(--player-color, #fff) 88%, white) 50%, transparent 80%);
+  transform: translateX(-135%);
+  animation: numCellSweep 660ms 200ms var(--ease-out) forwards;
 }
-@keyframes numCellSweep { to { transform: translateX(130%); } }
-.num-cell.num-cell--receded { animation: numCellRecede 280ms var(--ease-out) forwards; }
-@keyframes numCellRecede { to { opacity: 0.32; transform: scale(0.97); } }
+@keyframes numCellSweep { to { transform: translateX(135%); } }
+.num-cell.num-cell--receded { animation: numCellRecede 360ms var(--ease-out) forwards; }
+@keyframes numCellRecede { to { opacity: 0.16; transform: scale(0.9); filter: blur(1.5px); } }
 .num-cell-none {
   border-color: rgba(255, 107, 107, 0.4);
   color: #FF6B6B;

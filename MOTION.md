@@ -327,8 +327,10 @@ The phone is the *controller*; today the pick tap is a generic button scale. Mak
 with a player-color border flood + shadow bloom; the **other tiles recede** (`opacity 0.35, scale
 0.97`) so focus collapses onto the choice; a player-color sweep wipes the tile, "sending" the pick.
 
-**As built:** `numCellCommit` dip 0.92 → peak 1.08 → settle 1.03; `numCellRecede` → opacity 0.32,
-scale 0.97; a `::after` `numCellSweep`. A `_committingPick` flag holds the numbered grid for ~850ms
+**As built (v59, dialled up from the v57 first pass):** `numCellCommit` dip 0.84 → peak 1.24 → settle
+1.08 (`--ease-settle`); committed cell floods to a 44% player-color fill + a 3px ring + a big 40px
+glow; `numCellRecede` → opacity 0.16, scale 0.9, blur 1.5px (others recede hard with depth); a bold
+`::after` `numCellSweep`; haptic `vibrate([28,45,28])`. A `_committingPick` flag holds the numbered grid for ~1150ms
 (optimistically flipping `playback_status` to `playing` locally, mirroring the hub's flip) so the beat
 plays before the view turns over to the Stop controls, and a slow write can't flash the grid back to a
 tappable state. **Cross-device timing:** the phone beat (~700ms) deliberately overlaps the Hub's
