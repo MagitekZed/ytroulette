@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=55';
-import * as Hub from './hub.js?v=55';
+import * as UI from './ui.js?v=56';
+import * as Hub from './hub.js?v=56';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -182,12 +182,16 @@ function finishCardDeal(grid) {
   grid.classList.add('hub-grid--hero');
   const shine = document.createElement('div');
   shine.className = 'hub-grid-shine';
+  // Teardown is split across frames so the grid's layer tree is never
+  // recomposited all at once (that one-frame recomposite blinked the slate to
+  // black): the shine removes itself when its sweep ends, and --hero drops later
+  // on its own frame.
+  shine.addEventListener('animationend', () => shine.remove(), { once: true });
   grid.appendChild(shine);
   cardDealHeroTimeout = setTimeout(() => {
     grid.classList.remove('hub-grid--hero');
-    shine.remove();
     cardDealHeroTimeout = null;
-  }, 560);
+  }, 600);
 }
 
 function stopCardDeal() {

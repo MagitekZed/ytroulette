@@ -1582,7 +1582,6 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
    an overshoot detent; cadence + hero shimmer are JS-driven (runCardDeal). --- */
 .hub-thumb--dealing {
   z-index: 2;
-  will-change: transform;
   animation: cardDealIn 760ms var(--ease-over) var(--deal-delay, 0ms) both;
 }
 /* A settled card is fully landed and JS-owned — give it an explicit resting state
@@ -1608,11 +1607,25 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
   from { transform: translateX(-120%); }
   to   { transform: translateX(320%); }
 }
-.hub-grid--hero { animation: hubGridBloom 520ms var(--ease-out); }
+/* Hero glow lives on a pseudo-element that animates OPACITY only. Animating
+   box-shadow on .hub-grid itself repainted the whole cell container every frame,
+   and the abrupt teardown recomposited the grid's layer forest (backdrop-filter
+   badges + filtered imgs) in one frame — blinking the slate to black. Opacity is
+   compositor-only, so the grid layer is never repainted. */
+.hub-grid--hero::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 12px;
+  z-index: -1;
+  pointer-events: none;
+  box-shadow: 0 0 56px 12px color-mix(in srgb, var(--active-color, transparent) 55%, transparent);
+  animation: hubGridBloom 520ms var(--ease-out);
+}
 @keyframes hubGridBloom {
-  0%   { box-shadow: 0 0 0 2px var(--active-color, transparent), 0 0 32px 4px color-mix(in srgb, var(--active-color, transparent) 30%, transparent); }
-  45%  { box-shadow: 0 0 0 2px var(--active-color, transparent), 0 0 56px 12px color-mix(in srgb, var(--active-color, transparent) 55%, transparent); }
-  100% { box-shadow: 0 0 0 2px var(--active-color, transparent), 0 0 32px 4px color-mix(in srgb, var(--active-color, transparent) 30%, transparent); }
+  0%   { opacity: 0; }
+  45%  { opacity: 1; }
+  100% { opacity: 0; }
 }
 .hub-thumb-empty {
   display: flex;
