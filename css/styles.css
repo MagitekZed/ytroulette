@@ -2449,7 +2449,7 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
    number dips then snaps up in player color while the others recede, and a
    player-color sweep "sends" it to the Hub. JS holds the grid (_committingPick)
    for ~850ms so the beat plays before the view flips to playback controls. */
-.num-cell--committed {
+.num-cell.num-cell--committed {
   position: relative;
   z-index: 2;
   overflow: hidden;
@@ -2465,7 +2465,7 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
   30%  { transform: scale(1.08); }
   100% { transform: scale(1.03); }
 }
-.num-cell--committed::after {
+.num-cell.num-cell--committed::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -2475,7 +2475,7 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
   animation: numCellSweep 560ms 140ms var(--ease-out) forwards;
 }
 @keyframes numCellSweep { to { transform: translateX(130%); } }
-.num-cell--receded { animation: numCellRecede 280ms var(--ease-out) forwards; }
+.num-cell.num-cell--receded { animation: numCellRecede 280ms var(--ease-out) forwards; }
 @keyframes numCellRecede { to { opacity: 0.32; transform: scale(0.97); } }
 .num-cell-none {
   border-color: rgba(255, 107, 107, 0.4);

@@ -2,7 +2,7 @@
 // YouTube Roulette — View Rendering (ui.js)
 // Pure functions that return HTML strings for each view.
 // ============================================================
-import { formatDuration } from './hub.js?v=57';
+import { formatDuration } from './hub.js?v=58';
 
 // --- Player colors ---
 const PLAYER_COLORS = [
@@ -348,7 +348,10 @@ function renderNumberGrid(count, state) {
     const unplayable = available && !!results[i]?.unplayable;
     // No taps while a pick is committing (the beat owns the grid).
     const tappable = available && !unplayable && !isCommitting;
-    const loadedAttr = available ? justLoaded : '';
+    // Don't tag committing cells as "just loaded" — that selector's higher
+    // specificity would override the commit animation with numCellFadeIn (the
+    // bug where a fast tap, within the 250ms just-loaded window, killed the beat).
+    const loadedAttr = (available && !isCommitting) ? justLoaded : '';
     let cls = !available ? 'num-cell-empty' : (unplayable ? 'num-cell-unplayable' : '');
     let styleAttr = '';
     if (isCommitting && available) {
