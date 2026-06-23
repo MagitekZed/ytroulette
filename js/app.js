@@ -3,8 +3,8 @@
 // State management, Supabase integration, game logic, events
 // ============================================================
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import * as UI from './ui.js?v=53';
-import * as Hub from './hub.js?v=53';
+import * as UI from './ui.js?v=54';
+import * as Hub from './hub.js?v=54';
 
 // ============================================================
 // SUPABASE CLIENT
@@ -68,6 +68,7 @@ const state = {
   _skipVoteFiring: false,
   _thumbsGateInterval: null,
   _showingSelection: false,
+  _cardDealDone: false,
   _selectionTimeout: null,
   _launchingVideo: false,
   _launchingTimeout: null,
@@ -131,6 +132,75 @@ function startSlotReveal() {
 function stopSlotReveal() {
   slotIntervals.forEach(clearInterval);
   slotIntervals.length = 0;
+}
+
+// --- Card Deal: grid reveal (MOTION.md §4) ---
+let cardDealActive = false;
+let cardDealRemaining = 0;
+let cardDealHeroTimeout = null;
+
+function runCardDeal() {
+  // One deal per grid — re-renders during 'selecting' must not restart it.
+  if (cardDealActive || state._cardDealDone) return;
+  const grid = document.querySelector('.hub-grid');
+  if (!grid) return;
+  const cells = grid.querySelectorAll('.hub-thumb:not(.hub-thumb--dealing):not(.hub-thumb--settled)');
+  if (cells.length === 0) return;
+
+  cardDealActive = true;
+  cardDealRemaining = cells.length;
+  // Cadence (§4.2): <=5 cards deal one at a time; >5 deal one ROW at a time.
+  const perRow = cells.length > 5;
+
+  cells.forEach(cell => {
+    const idx = +cell.dataset.thumbIdx || 0;
+    const row = +cell.dataset.dealRow || 0;
+    const col = +cell.dataset.dealCol || 0;
+    const delay = perRow ? (row * 150 + col * 35) : (idx * 120);
+    cell.style.setProperty('--deal-delay', delay + 'ms');
+    cell.classList.add('hub-thumb--dealing');
+    const onEnd = (e) => {
+      // animationend bubbles from children; only act on the cell's own deal animation.
+      if (e.target !== cell || e.animationName !== 'cardDealIn') return;
+      cell.removeEventListener('animationend', onEnd);
+      cell.classList.remove('hub-thumb--dealing');
+      cell.classList.add('hub-thumb--settled');
+      cell.style.removeProperty('--deal-delay');
+      if (!cardDealActive) return; // deal was interrupted — settle the cell, skip the hero
+      cardDealRemaining--;
+      if (cardDealRemaining <= 0) finishCardDeal(grid);
+    };
+    cell.addEventListener('animationend', onEnd);
+  });
+}
+
+function finishCardDeal(grid) {
+  cardDealActive = false;
+  state._cardDealDone = true;
+  if (!grid || !grid.isConnected) return;
+  // Hero beat (§4.4): active-color shine sweep + frame bloom on the last land.
+  grid.classList.add('hub-grid--hero');
+  const shine = document.createElement('div');
+  shine.className = 'hub-grid-shine';
+  grid.appendChild(shine);
+  cardDealHeroTimeout = setTimeout(() => {
+    grid.classList.remove('hub-grid--hero');
+    shine.remove();
+    cardDealHeroTimeout = null;
+  }, 560);
+}
+
+function stopCardDeal() {
+  cardDealActive = false;
+  cardDealRemaining = 0;
+  if (cardDealHeroTimeout) { clearTimeout(cardDealHeroTimeout); cardDealHeroTimeout = null; }
+  // Tear down hero artifacts so a leftover --hero class can't freeze the grid if
+  // the 560ms timeout was cleared before it ran (e.g. a pick mid-hero-window).
+  const grid = document.querySelector('.hub-grid');
+  if (grid) {
+    grid.classList.remove('hub-grid--hero');
+    grid.querySelector('.hub-grid-shine')?.remove();
+  }
 }
 
 // ============================================================
@@ -538,6 +608,8 @@ function clearSession() {
   if (state._thumbsGateInterval) { clearInterval(state._thumbsGateInterval); state._thumbsGateInterval = null; }
   state._showingSelection = false;
   if (state._selectionTimeout) { clearTimeout(state._selectionTimeout); state._selectionTimeout = null; }
+  state._cardDealDone = false;
+  stopCardDeal();
   state._launchingVideo = false;
   if (state._launchingTimeout) { clearTimeout(state._launchingTimeout); state._launchingTimeout = null; }
   state._showingRoundBanner = false;
@@ -1270,6 +1342,10 @@ async function triggerSearch() {
   if (!state.isHub || state.isSearching) return;
   state.isSearching = true;
 
+  // A fresh search means a fresh grid — re-arm the card deal.
+  state._cardDealDone = false;
+  stopCardDeal();
+
   const term = state.room.current_search_term;
 
   // Anchor the min-time clock unconditionally — even when an upstream optimistic
@@ -1488,6 +1564,20 @@ function render() {
         }
         return false;
       }
+      // Card-deal hero beat owns the grid (the --hero class + the appended shine
+      // child + the settled cells) for ~560ms; skip morphing the whole grid so a
+      // realtime echo can't strip it mid-sweep.
+      // Only while still selecting — once a pick flips to 'playing', the picked
+      // grid MUST morph through (else the highlight/chip never paint and the
+      // Studio Card Lift clones an un-highlighted tile).
+      if (fromEl.classList && fromEl.classList.contains('hub-grid--hero') && state.room?.playback_status === 'selecting') return false;
+      // In-flight dealing cards are JS-owned — don't let an echo interrupt the
+      // animation, UNLESS this card was just picked (data-morph-skip) or the
+      // thumbnail changed (a new search / board).
+      if (fromEl.classList && fromEl.classList.contains('hub-thumb--dealing')) {
+        if (toEl.dataset?.morphSkip === 'true' || fromEl.dataset.dealKey !== toEl.dataset?.dealKey) return true;
+        return false;
+      }
       return true;
     },
   });
@@ -1512,6 +1602,16 @@ function render() {
     startSlotReveal();
   } else {
     stopSlotReveal();
+  }
+
+  // Card deal — fires once when the results grid mounts in 'selecting'.
+  if (state.isHub && state.currentView === 'game' && state.room?.playback_status === 'selecting'
+      && !state._showingSelection && !state._cardDealDone
+      && !state._showingCurtain && !state._showingCountdown && !state._showingRoundBanner
+      && !state._showingTurnBanner && !state._showingWinnerBanner) {
+    runCardDeal();
+  } else if (state.room?.playback_status !== 'selecting') {
+    stopCardDeal();
   }
 
   syncFullscreenButton();

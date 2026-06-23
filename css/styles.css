@@ -1525,6 +1525,7 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
 /* --- Hub Thumbnail Grid --- */
 .hub-grid {
   display: grid;
+  position: relative;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   width: 100%;
@@ -1534,11 +1535,11 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
   border-radius: 12px;
   box-shadow: 0 0 0 2px var(--active-color, transparent), 0 0 32px 4px color-mix(in srgb, var(--active-color, transparent) 30%, transparent);
   /* aspect-ratio set inline per render so 1fr×1fr cells stay 16:9 while the grid fills available space */
-  animation: hubGridFadeIn 0.45s cubic-bezier(0.2, 0, 0.2, 1) both;
+  animation: hubGridFadeIn 0.25s var(--ease-out) both;
 }
 @keyframes hubGridFadeIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .hub-thumb {
   position: relative;
@@ -1552,7 +1553,6 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  animation: hubThumbFadeIn 0.4s cubic-bezier(0.2, 0, 0.2, 1) both;
 }
 .hub-thumb::before {
   content: '';
@@ -1578,15 +1578,38 @@ input[type="text"]:focus { border-color: var(--red); box-shadow: 0 0 0 3px var(-
   pointer-events: none;
   z-index: 3;
 }
-.hub-thumb:nth-child(1) { animation-delay: 0.05s; }
-.hub-thumb:nth-child(2) { animation-delay: 0.10s; }
-.hub-thumb:nth-child(3) { animation-delay: 0.15s; }
-.hub-thumb:nth-child(4) { animation-delay: 0.20s; }
-.hub-thumb:nth-child(5) { animation-delay: 0.25s; }
-.hub-thumb:nth-child(n+6) { animation-delay: 0.30s; }
-@keyframes hubThumbFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+/* --- Card Deal: grid reveal (MOTION.md §4). Cards deal in face-up and land with
+   an overshoot detent; cadence + hero shimmer are JS-driven (runCardDeal). --- */
+.hub-thumb--dealing {
+  z-index: 2;
+  will-change: transform;
+  animation: cardDealIn 440ms var(--ease-over) var(--deal-delay, 0ms) both;
+}
+@keyframes cardDealIn {
+  from { opacity: 0; transform: translateY(-26px) scale(0.93) rotate(-4deg); }
+  to   { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+}
+/* Hero beat: active-color shine sweep across the grid + a frame bloom on the last land. */
+.hub-grid-shine {
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 40%;
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 4;
+  background: linear-gradient(105deg, transparent, color-mix(in srgb, var(--active-color, #fff) 32%, transparent), transparent);
+  transform: translateX(-120%);
+  animation: hubGridShine 520ms var(--ease-out) forwards;
+}
+@keyframes hubGridShine {
+  from { transform: translateX(-120%); }
+  to   { transform: translateX(320%); }
+}
+.hub-grid--hero { animation: hubGridBloom 520ms var(--ease-out); }
+@keyframes hubGridBloom {
+  0%   { box-shadow: 0 0 0 2px var(--active-color, transparent), 0 0 32px 4px color-mix(in srgb, var(--active-color, transparent) 30%, transparent); }
+  45%  { box-shadow: 0 0 0 2px var(--active-color, transparent), 0 0 56px 12px color-mix(in srgb, var(--active-color, transparent) 55%, transparent); }
+  100% { box-shadow: 0 0 0 2px var(--active-color, transparent), 0 0 32px 4px color-mix(in srgb, var(--active-color, transparent) 30%, transparent); }
 }
 .hub-thumb-empty {
   display: flex;
